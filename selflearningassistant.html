@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弱科 AI 自學教練</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; color: #333; transition: background-color 0.3s, color 0.3s; }
+        .dark { background-color: #1a1a1a; color: #ddd; }
+        .container { max-width: 430px; min-width: 360px; margin: 0 auto; padding: 1rem; overflow-x: auto; }
+        .card { background-color: white; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .dark .card { background-color: #2a2a2a; }
+        button { background-color: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
+        button:focus { outline: 2px solid #0056b3; }
+        .dark button { background-color: #0056b3; }
+        .dark button:hover { background-color: #003d80; }
+        select, input { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+        .dark select, .dark input { background-color: #333; color: #ddd; border-color: #555; }
+        canvas { width: 100% !important; height: auto !important; }
+        .hidden { display: none; }
+        footer { text-align: center; padding: 1rem; font-size: 0.8rem; color: #666; }
+        .dark footer { color: #aaa; }
+        @media print {
+            body { background-color: white; color: black; }
+            .card { box-shadow: none; border: 1px solid #ccc; }
+            button, .hidden-print { display: none; }
+        }
+        [tabindex]:focus { outline: 2px solid #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 tabindex="0" aria-label="弱科 AI 自學教練">弱科 AI 自學教練</h1>
+            <button id="theme-toggle" aria-label="切換主題">切換深色模式</button>
+            <button id="reset-data" aria-label="重設資料">重設資料</button>
+        </header>
+        <main>
+            <!-- Home Navigation Cards -->
+            <section id="home" class="card">
+                <h2>模組導覽</h2>
+                <select id="level-select" aria-label="選擇學習層級">
+                    <option value="國小">國小</option>
+                    <option value="國中">國中</option>
+                    <option value="高中">高中</option>
+                    <option value="大學" selected>大學</option>
+                </select>
+                <button id="diag-btn" tabindex="0" aria-label="弱點診斷">1. 弱點診斷</button>
+                <button id="error-btn" tabindex="0" aria-label="錯誤分析">2. 錯誤分析 + 三層提示</button>
+                <button id="micro-btn" tabindex="0" aria-label="微課補洞">3. 微課補洞</button>
+                <button id="practice-btn" tabindex="0" aria-label="階梯式練習">4. 階梯式練習</button>
+                <button id="review-btn" tabindex="0" aria-label="間隔複習">5. 間隔複習 (今日待複習: <span id="review-count">0</span>)</button>
+                <button id="leisure-btn" tabindex="0" aria-label="休閒學習">6. 休閒學習：語言</button>
+                <button id="import-btn" tabindex="0" aria-label="匯入題庫">匯入 JSON 題庫</button>
+                <input type="file" id="import-file" accept=".json" class="hidden">
+                <button id="export-btn" tabindex="0" aria-label="匯出題庫">匯出 JSON 題庫</button>
+                <button id="export-pdf" tabindex="0" aria-label="匯出 PDF 學習單">匯出 PDF</button>
+            </section>
+
+            <!-- Diagnosis Section -->
+            <section id="diagnosis" class="card hidden">
+                <h2>弱點診斷</h2>
+                <select id="subject-select" aria-label="選擇科目">
+                    <option value="微積分">微積分</option>
+                    <option value="材料力學">材料力學</option>
+                    <option value="語言">語言</option>
+                </select>
+                <select id="skill-select" aria-label="選擇技能"></select>
+                <button id="generate-quiz">生成小測 (8 題)</button>
+                <button id="llm-quiz" aria-label="使用 LLM 生成變化題">改用 LLM 產生變化題</button>
+                <form id="quiz-form"></form>
+                <button id="submit-quiz" class="hidden">交卷</button>
+                <button id="back-home-diag">返回主頁面</button>
+                <div id="radar-chart-container">
+                    <canvas id="radar-chart" role="img" aria-label="技能掌握度雷達圖"></canvas>
+                </div>
+                <div id="progress-chart-container">
+                    <canvas id="progress-chart" role="img" aria-label="7日正確率折線圖"></canvas>
+                </div>
+                <div id="wrong-list"></div>
+            </section>
+
+            <!-- Error Analysis Section -->
+            <section id="error-analysis" class="card hidden">
+                <h2>錯誤分析 + 三層提示</h2>
+                <div id="error-details"></div>
+                <button id="llm-analyze" aria-label="使用 LLM 分析錯誤">改用 LLM 分析</button>
+                <button id="back-home-error">返回主頁面</button>
+            </section>
+
+            <!-- Micro Lesson Section -->
+            <section id="micro-lesson" class="card hidden">
+                <h2>微課補洞</h2>
+                <div id="lesson-content"></div>
+                <button id="llm-lesson" aria-label="使用 LLM 生成講義">改用 LLM 生成變化講義</button>
+                <button id="back-home-micro">返回主頁面</button>
+            </section>
+
+            <!-- Practice Section -->
+            <section id="practice" class="card hidden">
+                <h2>階梯式練習</h2>
+                <div id="practice-questions"></div>
+                <button id="llm-practice" aria-label="使用 LLM 生成練習">改用 LLM 生成變化練習</button>
+                <button id="back-home-practice">返回主頁面</button>
+            </section>
+
+            <!-- Review Section -->
+            <section id="review" class="card hidden">
+                <h2>間隔複習</h2>
+                <div id="review-cards"></div>
+                <button id="back-home-review">返回主頁面</button>
+            </section>
+
+            <!-- Leisure Learning Section -->
+            <section id="leisure" class="card hidden">
+                <h2>休閒學習：語言</h2>
+                <select id="language-select" aria-label="選擇語言">
+                    <option value="英語">英語</option>
+                    <option value="日語">日語</option>
+                </select>
+                <select id="language-skill-select" aria-label="選擇語言技能"></select>
+                <button id="generate-language-quiz">生成語言練習 (5 題)</button>
+                <button id="llm-language" aria-label="使用 LLM 生成語言卡">改用 LLM 產生變化卡</button>
+                <form id="language-form"></form>
+                <button id="submit-language" class="hidden">提交</button>
+                <button id="back-home-leisure">返回主頁面</button>
+                <div id="language-feedback"></div>
+            </section>
+        </main>
+        <footer>
+            <p>學習用途，請勿上傳未公開考題。</p>
+        </footer>
+    </div>
+
+    <script>
+        // Data Model with Restored Quiz Bank and Levels
+        let data = {
+            levels: ["國小", "國中", "高中", "大學"],
+            subjects: {
+                "微積分": {
+                    skills: [
+                        {
+                            id: "Derivative_Optimization",
+                            name: "導數應用－極值",
+                            bloom: "Apply-Analyze",
+                            items: [
+                                { level: "高中", id: "DO-1", type: "mcq", stem: "函數 f(x) = x^2 - 4x + 3 的極小值在 x=?", options: ["1", "2", "3", "4"], answer: "2", unit: "", explanation: "求導 f'(x)=2x-4=0 => x=2", hints: ["求導數", "設等於0", "解方程"], errorTags: ["概念混淆"] },
+                                { level: "大學", id: "DO-2", type: "calc", stem: "計算 (x^3)' = ?", options: [], answer: "3x^2", unit: "", explanation: "功率規則", hints: ["回想功率規則", "n x^{n-1}", "3x^2"], errorTags: ["步驟遺漏"] },
+                                { level: "高中", id: "DO-3", type: "mcq", stem: "極值判別用什麼?", options: ["一階導", "二階導", "三階導", "積分"], answer: "二階導", unit: "", explanation: "二階導 >0 極小", hints: ["一階找點", "二階判型", "正凹上"], errorTags: ["邏輯"] },
+                                { level: "大學", id: "DO-4", type: "calc", stem: "f(x)=x^2 的二階導?", options: [], answer: "2", unit: "", explanation: "f''(x)=2", hints: ["求二階", "常數", "2"], errorTags: ["符號"] },
+                                { level: "高中", id: "DO-5", type: "mcq", stem: "鏈鎖規則用在?", options: ["複合函數", "簡單函數", "常數", "線性"], answer: "複合函數", unit: "", explanation: "d/dx [f(g(x))] = f'(g) g'(x)", hints: ["內外函數", "外導內", "乘內導"], errorTags: ["單位"] },
+                                { level: "大學", id: "DO-6", type: "calc", stem: "d/dx sin(2x) = ?", options: [], answer: "2 cos(2x)", unit: "", explanation: "鏈鎖", hints: ["sin' = cos", "乘 2", "2 cos(2x)"], errorTags: ["概念混淆"] },
+                                { level: "高中", id: "DO-7", type: "mcq", stem: "極值應用在?", options: ["優化問題", "積分", "微分方程", "矩陣"], answer: "優化問題", unit: "", explanation: "找最大最小", hints: ["實務應用", "邊界", "導數=0"], errorTags: ["步驟遺漏"] },
+                                { level: "大學", id: "DO-8", type: "calc", stem: "極值點 f(x)=x^3 -3x at x=1?", options: [], answer: "局部極大", unit: "", explanation: "f''(1)=-6<0", hints: ["求二階", "符號判斷", "負為極大"], errorTags: ["邏輯"] },
+                                { level: "高中", id: "DO-9", type: "mcq", stem: "f(x)= -x^2 的極值類型?", options: ["極大", "極小", "無", "不定"], answer: "極大", unit: "", explanation: "f''(0)=-2<0", hints: ["二階負", "凹下", "極大"], errorTags: ["符號"] },
+                                { level: "國中", id: "DO-10", type: "mcq", stem: "邊界極值需檢查?", options: ["端點", "內點", "無限", "皆是"], answer: "皆是", unit: "", explanation: "閉區間需檢查端點", hints: ["閉區間", "端點值", "比較"], errorTags: ["步驟遺漏"] }
+                            ],
+                            microLesson: { keyPoints: ["定義: 極值為函數局部最大/小值。", "步驟: 求一階導=0找臨界點，二階導判型。", "口訣: 二階正凹上極小，負凹下極大。"], example: "例: f(x)=x^2-4x+3, f'=2x-4=0 => x=2, f''=2>0 => 極小值 f(2)=-1。" }
+                        },
+                        {
+                            id: "Chain_Rule",
+                            name: "鏈鎖規則",
+                            bloom: "Apply",
+                            items: [
+                                { level: "高中", id: "CR-1", type: "mcq", stem: "d/dx [ (x^2 +1)^3 ] ?", options: ["3(x^2+1)^2 * 2x", "3(x^2+1)^2", " (x^2+1)^3 * 2x", "6x"], answer: "3(x^2+1)^2 * 2x", unit: "", explanation: "鏈鎖", hints: ["外導 3u^2", "u=x^2+1", "乘 2x"], errorTags: ["步驟遺漏"] },
+                                { level: "大學", id: "CR-2", type: "calc", stem: "d/dx e^{2x} = ?", options: [], answer: "2 e^{2x}", unit: "", explanation: "e^u * u'", hints: ["e^u 導 e^u", "u=2x", "乘2"], errorTags: ["概念混淆"] },
+                                { level: "高中", id: "CR-3", type: "mcq", stem: "d/dx ln(3x) = ?", options: ["1/(3x) * 3", "1/x", "3/x", "ln(3)"], answer: "1/(3x) * 3", unit: "", explanation: "ln u * (1/u) u'", hints: ["ln u'", "1/u", "u'=3"], errorTags: ["邏輯"] },
+                                { level: "大學", id: "CR-4", type: "calc", stem: "d/dx cos(x^2) = ?", options: [], answer: "-sin(x^2) * 2x", unit: "", explanation: "cos u * -sin u * u'", hints: ["cos'=-sin", "u=x^2", "乘2x"], errorTags: ["符號"] },
+                                { level: "高中", id: "CR-5", type: "mcq", stem: "多層複合需?", options: ["多次鏈鎖", "一次", "無", "積分"], answer: "多次鏈鎖", unit: "", explanation: "層層外導乘內導", hints: ["最外先", "逐層內", "全乘"], errorTags: ["單位"] },
+                                { level: "大學", id: "CR-6", type: "calc", stem: "d/dx (sin(2x))^2 = ?", options: [], answer: "2 sin(2x) cos(2x) * 2", unit: "", explanation: "u^2 * 2u u', u=sin(2x)", hints: ["功率規則", "u=sin(2x)", "u'=2cos(2x)"], errorTags: ["步驟遺漏"] },
+                                { level: "高中", id: "CR-7", type: "mcq", stem: "隱函數微分用?", options: ["鏈鎖", "直接", "積分", "無"], answer: "鏈鎖", unit: "", explanation: "對 y 視為 x 函數", hints: ["dy/dx", "兩邊導", "解 dy/dx"], errorTags: ["概念混淆"] },
+                                { level: "大學", id: "CR-8", type: "mcq", stem: "d/dx arcsin(x) = ?", options: ["1/sqrt(1-x^2)", "-1/sqrt(1-x^2)", "sqrt(1-x^2)", "x"], answer: "1/sqrt(1-x^2)", unit: "", explanation: "反三角導數", hints: ["arcsin'", "1/sqrt(1-u^2)", "u=x"], errorTags: ["邏輯"] },
+                                { level: "大學", id: "CR-9", type: "calc", stem: "d/dx tan(3x) = ?", options: [], answer: "3 sec^2(3x)", unit: "", explanation: "tan u * sec^2 u * u'", hints: ["tan'=sec^2", "u=3x", "乘3"], errorTags: ["符號"] },
+                                { level: "高中", id: "CR-10", type: "mcq", stem: "鏈鎖規則本質?", options: ["速率乘積", "單變數", "多變數", "無"], answer: "速率乘積", unit: "", explanation: "du/dt = du/dx * dx/dt", hints: ["中間變數", "消除", "連鎖"], errorTags: ["單位"] }
+                            ],
+                            microLesson: { keyPoints: ["定義: 複合函數導數為外函數導乘內函數導。", "步驟: 識別內外，求外導(內不變)，乘內導。", "口訣: 外導內乘內導。"], example: "例: f(x)=(x^2+1)^3, 外 u^3 導 3u^2, 內 x^2+1 導 2x, 結果 3(x^2+1)^2 * 2x。" }
+                        }
+                    ]
+                },
+                "材料力學": {
+                    skills: [
+                        {
+                            id: "Shear_Moment_Diagram",
+                            name: "剪力彎矩圖",
+                            bloom: "Analyze",
+                            items: [
+                                { level: "大學", id: "SMD-1", type: "mcq", stem: "簡支梁均布載 q，最大彎矩?", options: ["q L^2 /8", "q L /2", "q L^3 /12", "0"], answer: "q L^2 /8", unit: "N-m", explanation: "中點最大", hints: ["積分剪力", "彎矩公式", "q L^2 /8"], errorTags: ["單位"] },
+                                { level: "大學", id: "SMD-2", type: "calc", stem: "懸臂梁端點集中力 P，根部彎矩?", options: [], answer: "P L", unit: "N-m", explanation: "M = P * L", hints: ["力臂", "L 長", "P L"], errorTags: ["概念混淆"] },
+                                { level: "高中", id: "SMD-3", type: "mcq", stem: "剪力圖與彎矩圖關係?", options: ["彎矩導=剪力", "剪力導=彎矩", "積分", "無"], answer: "彎矩導=剪力", unit: "", explanation: "dM/dx = V", hints: ["微分", "斜率", "V=dM/dx"], errorTags: ["邏輯"] },
+                                { level: "大學", id: "SMD-4", type: "calc", stem: "簡支梁中點力 P，左半最大剪力?", options: [], answer: "P/2", unit: "N", explanation: "反力各 P/2", hints: ["平衡", "反力 P/2", "左 V=P/2"], errorTags: ["步驟遺漏"] },
+                                { level: "高中", id: "SMD-5", type: "mcq", stem: "彎矩圖形狀 for 均布載?", options: ["拋物線", "直線", "三角", "方形"], answer: "拋物線", unit: "", explanation: "二次積分", hints: ["q 常數", "V 線性", "M 二次"], errorTags: ["符號"] },
+                                { level: "大學", id: "SMD-6", type: "calc", stem: "懸臂梁均布 q，最大剪力?", options: [], answer: "q L", unit: "N", explanation: "根部 V=qL", hints: ["總載", "qL", "根部"], errorTags: ["單位"] },
+                                { level: "高中", id: "SMD-7", type: "mcq", stem: "集中力處剪力圖?", options: ["跳躍", "連續", "零", "無限"], answer: "跳躍", unit: "", explanation: "V 突變 P 大小", hints: ["力平衡", "左右差 P", "跳"], errorTags: ["概念混淆"] },
+                                { level: "大學", id: "SMD-8", type: "mcq", stem: "彎矩圖在集中偶處?", options: ["跳躍", "連續", "斜率變", "零"], answer: "跳躍", unit: "", explanation: "M 突變 M0 大小", hints: ["扭矩", "左右差 M0", "跳"], errorTags: ["邏輯"] },
+                                { level: "大學", id: "SMD-9", type: "calc", stem: "簡支梁均布 q，中點彎矩?", options: [], answer: "q L^2 /8", unit: "N-m", explanation: "公式", hints: ["標準", "qL^2/8", "中點"], errorTags: ["步驟遺漏"] },
+                                { level: "高中", id: "SMD-10", type: "mcq", stem: "繪圖起點?", options: ["左端", "右端", "中", "任意"], answer: "左端", unit: "", explanation: "從左累積", hints: ["順序", "左到右", "積分"], errorTags: ["單位"] }
+                            ],
+                            microLesson: { keyPoints: ["定義: 剪力 V 為內力切向，彎矩 M 為內力矩。", "步驟: 求支撐反力，切段求 V/M，繪圖。", "口訣: V 為 M 斜率，集中力 V 跳，集中偶 M 跳。"], example: "例: 簡支梁長 L，均布 q，反力各 qL/2，V從 qL/2 線降至 -qL/2，M從0拋物升至 qL^2/8 再降0。" }
+                        }
+                    ]
+                },
+                "語言": {
+                    skills: [
+                        {
+                            id: "Vocabulary",
+                            name: "詞彙",
+                            bloom: "Remember",
+                            items: [
+                                { level: "國小", id: "VOC-1", type: "cloze", stem: "The color of the sky is [ ].", answer: "blue", unit: "", explanation: "天空是藍色的", hints: ["顏色", "天空", "blue"], errorTags: ["拼字"] },
+                                { level: "國中", id: "VOC-2", type: "mcq", stem: "Happy 的反義詞?", options: ["sad", "joyful", "angry", "tired"], answer: "sad", unit: "", explanation: "快樂的反義是傷心", hints: ["反義", "happy", "sad"], errorTags: ["概念混淆"] },
+                                { level: "高中", id: "VOC-3", type: "cloze", stem: "She is very [ ] in learning new words.", answer: "interested", unit: "", explanation: "表示興趣", hints: ["形容詞", "學習", "interested"], errorTags: ["詞性"] },
+                                { level: "大學", id: "VOC-4", type: "mcq", stem: "Synonym of 'big'?", options: ["small", "large", "tiny", "short"], answer: "large", unit: "", explanation: "同義詞", hints: ["同義", "big", "large"], errorTags: ["概念混淆"] },
+                                { level: "國中", id: "VOC-5", type: "cloze", stem: "I have two [ ] in my house.", answer: "cats", unit: "", explanation: "寵物名詞", hints: ["動物", "複數", "cats"], errorTags: ["拼字"] },
+                                { level: "高中", id: "VOC-6", type: "mcq", stem: "What does 'run' mean?", options: ["走", "跑", "跳", "飛"], answer: "跑", unit: "", explanation: "動詞翻譯", hints: ["動作", "快速", "跑"], errorTags: ["翻譯"] },
+                                { level: "大學", id: "VOC-7", type: "calc", stem: "翻譯：'freedom' = ?", options: [], answer: "自由", unit: "", explanation: "抽象名詞", hints: ["抽象", "權利", "自由"], errorTags: ["翻譯"] },
+                                { level: "國小", id: "VOC-8", type: "mcq", stem: "What is 'dog' in Chinese?", options: ["貓", "狗", "鳥", "魚"], answer: "狗", unit: "", explanation: "動物名稱", hints: ["寵物", "汪汪", "狗"], errorTags: ["翻譯"] }
+                            ],
+                            microLesson: { keyPoints: ["定義: 詞彙是語言的基本單位。", "步驟: 記憶單詞、聯想例句、反覆練習。", "口訣: 看聽說寫，詞彙活用。"], example: "例: 'happy' 表示快樂，例句: I am happy to learn English." }
+                        },
+                        {
+                            id: "Grammar",
+                            name: "語法",
+                            bloom: "Understand",
+                            items: [
+                                { level: "高中", id: "GRAM-1", type: "cloze", stem: "I [ ] to school every day.", answer: "go", unit: "", explanation: "現在簡單式", hints: ["動詞", "每天", "go"], errorTags: ["時態"] },
+                                { level: "國中", id: "GRAM-2", type: "mcq", stem: "He [ ] a student.", options: ["is", "are", "am", "be"], answer: "is", unit: "", explanation: "第三人稱單數", hints: ["he", "單數", "is"], errorTags: ["主詞一致"] },
+                                { level: "大學", id: "GRAM-3", type: "cloze", stem: "If I [ ] you, I would study harder.", answer: "were", unit: "", explanation: "虛擬語氣", hints: ["if", "假設", "were"], errorTags: ["語氣"] },
+                                { level: "國小", id: "GRAM-4", type: "mcq", stem: "What is correct?", options: ["I am happy.", "I is happy.", "I are happy.", "I be happy."], answer: "I am happy.", unit: "", explanation: "主詞 I 用 am", hints: ["I", "be動詞", "am"], errorTags: ["主詞一致"] },
+                                { level: "高中", id: "GRAM-5", type: "cloze", stem: "She [ ] running yesterday.", answer: "was", unit: "", explanation: "過去進行式", hints: ["過去", "進行", "was"], errorTags: ["時態"] },
+                                { level: "大學", id: "GRAM-6", type: "mcq", stem: "Which is passive voice?", options: ["The book is read.", "I read the book.", "Reading is fun.", "I am reading."], answer: "The book is read.", unit: "", explanation: "被動語態", hints: ["被動", "is", "read"], errorTags: ["語態"] },
+                                { level: "國中", id: "GRAM-7", type: "cloze", stem: "They [ ] in the park now.", answer: "are playing", unit: "", explanation: "現在進行式", hints: ["現在", "進行", "are"], errorTags: ["時態"] }
+                            ],
+                            microLesson: { keyPoints: ["定義: 語法是語言結構規則。", "步驟: 理解句型、練習造句、檢查錯誤。", "口訣: 主詞動詞一致，時態語態分清。"], example: "例: I go to school (現在簡單式), I was going (過去進行式)。" }
+                        }
+                    ]
+                }
+            }
+        };
+
+        // Local Storage Keys
+        const STORAGE_KEY = 'weak-subject-app';
+        let appState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+            scores: {}, // skill: mastery (0-100)
+            reviews: [], // {itemId, nextDate, ef:2.5, interval:1, repetitions:0}
+            progress: [], // [{date, accuracy, subject, skill}]
+            theme: 'light',
+            wrongs: [], // wrong items list
+            level: '大學', // Default level
+            languageScores: {} // For leisure language scores
+        };
+
+        // SM-2 Algorithm
+        function sm2(quality, ef = 2.5, interval = 1, repetitions = 0) {
+            if (quality >= 3) {
+                if (repetitions === 0) interval = 1;
+                else if (repetitions === 1) interval = 6;
+                else interval = Math.round(interval * ef);
+                repetitions++;
+                ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+                if (ef < 1.3) ef = 1.3;
+            } else {
+                repetitions = 0;
+                interval = 1;
+            }
+            const nextDate = new Date();
+            nextDate.setDate(nextDate.getDate() + interval);
+            return { ef, interval, nextDate: nextDate.toISOString().split('T')[0], repetitions };
+        }
+
+        // Update Review Count
+        function updateReviewCount() {
+            const today = new Date().toISOString().split('T')[0];
+            const count = appState.reviews.filter(r => r.nextDate <= today).length;
+            document.getElementById('review-count').textContent = count;
+        }
+
+        // Save State
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            updateReviewCount();
+        }
+
+        // Reset Data
+        document.getElementById('reset-data').addEventListener('click', () => {
+            appState = { scores: {}, reviews: [], progress: [], theme: 'light', wrongs: [], level: '大學', languageScores: {} };
+            saveState();
+            location.reload();
+        });
+
+        // Theme Toggle
+        const body = document.body;
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            appState.theme = appState.theme === 'light' ? 'dark' : 'light';
+            body.classList.toggle('dark');
+            saveState();
+        });
+        if (appState.theme === 'dark') body.classList.add('dark');
+
+        // Navigation
+        const sections = ['home', 'diagnosis', 'error-analysis', 'micro-lesson', 'practice', 'review', 'leisure'];
+        function showSection(id) {
+            sections.forEach(s => {
+                const sec = document.getElementById(s);
+                if (sec) sec.classList.add('hidden');
+            });
+            const targetSec = document.getElementById(id);
+            if (targetSec) targetSec.classList.remove('hidden');
+        }
+
+        document.getElementById('diag-btn').addEventListener('click', () => showSection('diagnosis'));
+        document.getElementById('error-btn').addEventListener('click', () => showSection('error-analysis'));
+        document.getElementById('micro-btn').addEventListener('click', () => showSection('micro-lesson'));
+        document.getElementById('practice-btn').addEventListener('click', () => showSection('practice'));
+        document.getElementById('review-btn').addEventListener('click', () => {
+            showSection('review');
+            loadReviews();
+        });
+        document.getElementById('leisure-btn').addEventListener('click', () => {
+            showSection('leisure');
+            loadLanguageSkills();
+        });
+
+        // Back to Home Buttons
+        document.getElementById('back-home-diag').addEventListener('click', () => showSection('home'));
+        document.getElementById('back-home-error').addEventListener('click', () => showSection('home'));
+        document.getElementById('back-home-micro').addEventListener('click', () => showSection('home'));
+        document.getElementById('back-home-practice').addEventListener('click', () => showSection('home'));
+        document.getElementById('back-home-review').addEventListener('click', () => showSection('home'));
+        document.getElementById('back-home-leisure').addEventListener('click', () => showSection('home'));
+
+        // Level Select
+        const levelSelect = document.getElementById('level-select');
+        levelSelect.value = appState.level;
+        levelSelect.addEventListener('change', () => {
+            appState.level = levelSelect.value;
+            saveState();
+            loadSkills();
+            loadLanguageSkills();
+        });
+
+        // Subject and Skill Select
+        const subjectSelect = document.getElementById('subject-select');
+        const skillSelect = document.getElementById('skill-select');
+        subjectSelect.addEventListener('change', loadSkills);
+        function loadSkills() {
+            const subject = subjectSelect.value;
+            const level = appState.level;
+            skillSelect.innerHTML = '';
+            if (!data.subjects[subject]) {
+                skillSelect.innerHTML = '<option>無可用技能</option>';
+                return;
+            }
+            data.subjects[subject].skills.forEach(skill => {
+                skill.filteredItems = skill.items.filter(item => item.level === level || level === '大學');
+                if (skill.filteredItems.length > 0) {
+                    const opt = document.createElement('option');
+                    opt.value = skill.id;
+                    opt.textContent = skill.name;
+                    skillSelect.appendChild(opt);
+                }
+            });
+            if (skillSelect.options.length === 0) {
+                skillSelect.innerHTML = '<option>無適合層級的技能</option>';
+            }
+        }
+        loadSkills();
+
+        // Language Skill Select
+        const languageSelect = document.getElementById('language-select');
+        const languageSkillSelect = document.getElementById('language-skill-select');
+        languageSelect.addEventListener('change', loadLanguageSkills);
+        function loadLanguageSkills() {
+            const level = appState.level;
+            languageSkillSelect.innerHTML = '';
+            data.subjects["語言"].skills.forEach(skill => {
+                skill.filteredItems = skill.items.filter(item => item.level === level || level === '大學');
+                if (skill.filteredItems.length > 0) {
+                    const opt = document.createElement('option');
+                    opt.value = skill.id;
+                    opt.textContent = skill.name;
+                    languageSkillSelect.appendChild(opt);
+                }
+            });
+            if (languageSkillSelect.options.length === 0) {
+                languageSkillSelect.innerHTML = '<option>無適合層級的語言技能</option>';
+            }
+        }
+        loadLanguageSkills();
+
+        // Generate Quiz
+        let currentQuiz = [];
+        let currentSkill = null;
+        document.getElementById('generate-quiz').addEventListener('click', () => generateQuiz(false));
+        document.getElementById('llm-quiz').addEventListener('click', () => generateQuiz(true));
+
+        async function generateQuiz(useLLM) {
+            const subject = subjectSelect.value;
+            const skillId = skillSelect.value;
+            currentSkill = data.subjects[subject].skills.find(s => s.id === skillId);
+            if (!currentSkill) {
+                alert('請選擇有效技能');
+                return;
+            }
+            if (useLLM) {
+                const payload = { subject, skill: currentSkill.name, level: appState.level };
+                const result = await callLLM('diagnose', payload);
+                if (result) currentQuiz = result.items;
+                else currentQuiz = currentSkill.filteredItems.slice(0, 8);
+            } else {
+                currentQuiz = currentSkill.filteredItems.slice(0, 8);
+            }
+            if (currentQuiz.length < 8) {
+                alert('題目數不足，顯示可用題目');
+            }
+            renderQuiz();
+        }
+
+        function renderQuiz() {
+            const form = document.getElementById('quiz-form');
+            form.innerHTML = '';
+            currentQuiz.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.innerHTML = `<p aria-label="題目 ${idx+1}">${idx+1}. ${item.stem}</p>`;
+                if (item.type === 'mcq') {
+                    item.options.forEach((opt, optIdx) => {
+                        div.innerHTML += `<label><input type="radio" name="q${idx}" value="${opt}" tabindex="0" aria-label="題目 ${idx+1} 選項 ${optIdx+1}: ${opt}">${opt}</label><br>`;
+                    });
+                } else {
+                    div.innerHTML += `<input type="text" name="q${idx}" tabindex="0" aria-label="題目 ${idx+1} 計算答案">`;
+                }
+                form.appendChild(div);
+            });
+            document.getElementById('submit-quiz').classList.remove('hidden');
+        }
+
+        // Submit Quiz
+        document.getElementById('submit-quiz').addEventListener('click', () => {
+            const form = document.getElementById('quiz-form');
+            const answers = Array.from(form.querySelectorAll('input[name^="q"]'));
+            if (answers.some(a => !a.value && a.type !== 'radio' || (a.type === 'radio' && !form.querySelector(`[name="${a.name}"]:checked`)))) {
+                alert('請完成所有題目');
+                return;
+            }
+            let score = 0;
+            const today = new Date().toISOString().split('T')[0];
+            appState.wrongs = [];
+            currentQuiz.forEach((item, idx) => {
+                const answer = form.querySelector(`[name="q${idx}"]:checked`)?.value || form.querySelector(`[name="q${idx}"]`)?.value;
+                if (answer === item.answer) score++;
+                else {
+                    appState.wrongs.push(item);
+                    if (!appState.reviews.find(r => r.itemId === item.id)) {
+                        appState.reviews.push({ itemId: item.id, nextDate: today, ef: 2.5, interval: 1, repetitions: 0 });
+                    }
+                }
+            });
+            const mastery = (score / 8) * 100;
+            const skillId = skillSelect.value;
+            appState.scores[skillId] = mastery;
+            appState.progress.push({ date: today, accuracy: mastery, subject: subjectSelect.value, skill: skillId });
+            if (appState.progress.length > 7) appState.progress.shift();
+            saveState();
+            renderRadar();
+            renderProgress();
+            renderWrongList();
+        });
+
+        // Render Wrong List
+        function renderWrongList() {
+            const list = document.getElementById('wrong-list');
+            list.innerHTML = '<h3>錯題清單</h3>';
+            appState.wrongs.forEach(item => {
+                const btn = document.createElement('button');
+                btn.textContent = item.stem;
+                btn.tabIndex = 0;
+                btn.setAttribute('aria-label', `查看錯題: ${item.stem}`);
+                btn.addEventListener('click', () => showErrorAnalysis(item));
+                list.appendChild(btn);
+            });
+        }
+
+        // Error Analysis
+        function showErrorAnalysis(item) {
+            showSection('error-analysis');
+            const details = document.getElementById('error-details');
+            details.innerHTML = `<p>錯誤類型: ${item.errorTags[0]}</p>
+                <p>第一個關鍵錯點: ${item.hints[0]}</p>
+                <p>提示1: ${item.hints[0]}</p>
+                <p>提示2: ${item.hints[1]}</p>
+                <p>提示3: ${item.hints[2]}</p>
+                <p>標準解: ${item.explanation}</p>`;
+        }
+
+        document.getElementById('llm-analyze').addEventListener('click', async () => {
+            const item = appState.wrongs[0] || currentQuiz[0];
+            const studentAnswer = 'wrong';
+            const payload = { question: item.stem + ' 正解: ' + item.answer, student: studentAnswer };
+            const result = await callLLM('analyze', payload);
+            if (result) {
+                const details = document.getElementById('error-details');
+                details.innerHTML += `<p>LLM 錯誤類型: ${result.errorType}</p>
+                    <p>第一錯點: ${result.firstFault}</p>
+                    <p>提示: ${result.hints.join(', ')}</p>`;
+                showMicroLesson(result.microLesson);
+                showFollowUp(result.followUp);
+            }
+        });
+
+        // Micro Lesson
+        function showMicroLesson(lesson) {
+            showSection('micro-lesson');
+            const content = document.getElementById('lesson-content');
+            content.innerHTML = '<h3>重點講義</h3>';
+            lesson.keyPoints.forEach(pt => content.innerHTML += `<p>${pt}</p>`);
+            content.innerHTML += `<p>範例: ${lesson.example}</p>`;
+        }
+
+        document.getElementById('llm-lesson').addEventListener('click', async () => {
+            const payload = { skill: currentSkill.name, level: appState.level };
+            const result = await callLLM('analyze', payload);
+            if (result) showMicroLesson(result.microLesson);
+            else if (currentSkill.microLesson) showMicroLesson(currentSkill.microLesson);
+        });
+
+        // Practice
+        document.getElementById('llm-practice').addEventListener('click', async () => {
+            const payload = { skill: currentSkill.name, level: appState.level };
+            const result = await callLLM('analyze', payload);
+            if (result) showFollowUp(result.followUp);
+        });
+
+        function showFollowUp(followUp) {
+            showSection('practice');
+            const prac = document.getElementById('practice-questions');
+            prac.innerHTML = `<h3>${followUp.difficulty}</h3><p>${followUp.item.stem}</p>`;
+            const input = document.createElement('input');
+            input.type = followUp.item.type === 'mcq' ? 'radio' : 'text';
+            prac.appendChild(input);
+        }
+
+        // Reviews
+        function loadReviews() {
+            const cards = document.getElementById('review-cards');
+            cards.innerHTML = '';
+            const today = new Date().toISOString().split('T')[0];
+            appState.reviews.filter(r => r.nextDate <= today).forEach(review => {
+                const item = findItemById(review.itemId);
+                if (!item) return;
+                const div = document.createElement('div');
+                div.innerHTML = `<p aria-label="複習題目">${item.stem}</p>`;
+                [0,1,2,3,4,5].forEach(q => {
+                    const btn = document.createElement('button');
+                    btn.textContent = q;
+                    btn.tabIndex = 0;
+                    btn.setAttribute('aria-label', `評分 ${q}`);
+                    btn.addEventListener('click', () => {
+                        const updated = sm2(q, review.ef, review.interval, review.repetitions);
+                        review.ef = updated.ef;
+                        review.interval = updated.interval;
+                        review.nextDate = updated.nextDate;
+                        review.repetitions = updated.repetitions;
+                        saveState();
+                        loadReviews();
+                    });
+                    div.appendChild(btn);
+                });
+                cards.appendChild(div);
+            });
+        }
+
+        // Find Item By Id
+        function findItemById(id) {
+            for (const subject in data.subjects) {
+                for (const skill of data.subjects[subject].skills) {
+                    const item = skill.items.find(item => item.id === id);
+                    if (item) return item;
+                }
+            }
+            return null;
+        }
+
+        // Charts
+        function renderRadar() {
+            const container = document.getElementById('radar-chart-container');
+            if (Object.keys(appState.scores).length === 0) {
+                container.innerHTML = '<p>請先完成測驗以顯示圖表</p>';
+                return;
+            }
+            container.innerHTML = '<canvas id="radar-chart" role="img" aria-label="技能掌握度雷達圖"></canvas>';
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(appState.scores),
+                    datasets: [{ label: '掌握度', data: Object.values(appState.scores) }]
+                },
+                options: { scale: { ticks: { beginAtZero: true, max: 100 } } }
+            });
+        }
+
+        function renderProgress() {
+            const container = document.getElementById('progress-chart-container');
+            if (appState.progress.length === 0) {
+                container.innerHTML = '<p>請先完成測驗以顯示圖表</p>';
+                return;
+            }
+            container.innerHTML = '<canvas id="progress-chart" role="img" aria-label="7日正確率折線圖"></canvas>';
+            const ctx = document.getElementById('progress-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: appState.progress.map(p => p.date),
+                    datasets: [{ label: '7日正確率', data: appState.progress.map(p => p.accuracy) }]
+                },
+                options: { scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        }
+
+        // Import/Export
+        document.getElementById('import-btn').addEventListener('click', () => {
+            const importLevel = prompt("請選擇匯入題庫的層級 (國小, 國中, 高中, 大學):");
+            const importSubject = prompt("請選擇匯入題庫的科目 (微積分, 材料力學, 語言):");
+            const importSkill = prompt("請選擇匯入題庫的技能 (例如: Derivative_Optimization):");
+            if (importLevel && importSubject && importSkill && data.levels.includes(importLevel) && data.subjects[importSubject] && data.subjects[importSubject].skills.find(s => s.id === importSkill)) {
+                document.getElementById('import-file').setAttribute('data-import-level', importLevel);
+                document.getElementById('import-file').setAttribute('data-import-subject', importSubject);
+                document.getElementById('import-file').setAttribute('data-import-skill', importSkill);
+                document.getElementById('import-file').click();
+            } else {
+                alert('無效的層級、科目或技能，請重試');
+            }
+        });
+        document.getElementById('import-file').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const importLevel = e.target.getAttribute('data-import-level');
+            const importSubject = e.target.getAttribute('data-import-subject');
+            const importSkill = e.target.getAttribute('data-import-skill');
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const importedItems = JSON.parse(ev.target.result);
+                    if (Array.isArray(importedItems) && importedItems.every(item => item.id && item.stem && item.answer && item.level === importLevel)) {
+                        const skill = data.subjects[importSubject].skills.find(s => s.id === importSkill);
+                        if (skill) {
+                            skill.items = skill.items.concat(importedItems);
+                            alert('匯入成功，已歸類至指定層級、科目和技能');
+                            loadSkills();
+                            loadLanguageSkills();
+                            saveState();
+                        } else {
+                            alert('找不到指定技能');
+                        }
+                    } else {
+                        alert('JSON 格式錯誤: 必須是 items 陣列，且包含 id/stem/answer/level');
+                    }
+                } catch (err) {
+                    alert('匯入失敗: ' + err);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('export-btn').addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'quizbank.json';
+            a.click();
+        });
+
+        // PDF Export
+        document.getElementById('export-pdf').addEventListener('click', () => {
+            const printDiv = document.createElement('div');
+            printDiv.id = 'print-area';
+            printDiv.innerHTML = `
+                <h2>學習單</h2>
+                <h3>診斷結果</h3>
+                <p>技能掌握度: ${JSON.stringify(appState.scores)}</p>
+                <p>語言學習得分: ${JSON.stringify(appState.languageScores)}</p>
+                <h3>錯題講義</h3>
+                ${appState.wrongs.map(w => `<p>題目: ${w.stem}<br>解釋: ${w.explanation}</p>`).join('')}
+                <h3>複習清單</h3>
+                ${appState.reviews.map(r => {
+                    const item = findItemById(r.itemId);
+                    return item ? `<p>題目: ${item.stem}<br>下次複習: ${r.nextDate}</p>` : '';
+                }).join('')}
+            `;
+            document.body.appendChild(printDiv);
+            window.print();
+            printDiv.remove();
+        });
+
+        // Language Quiz
+        let currentLanguageQuiz = [];
+        let currentLanguageSkill = null;
+        document.getElementById('generate-language-quiz').addEventListener('click', () => generateLanguageQuiz(false));
+        document.getElementById('llm-language').addEventListener('click', () => generateLanguageQuiz(true));
+
+        async function generateLanguageQuiz(useLLM) {
+            const language = languageSelect.value;
+            const skillId = languageSkillSelect.value;
+            currentLanguageSkill = data.subjects["語言"].skills.find(s => s.id === skillId);
+            if (!currentLanguageSkill) {
+                alert('請選擇有效語言技能');
+                return;
+            }
+            if (useLLM) {
+                const payload = { language, skill: currentLanguageSkill.name, level: appState.level };
+                const result = await callLLM('cards', payload);
+                if (result) currentLanguageQuiz = result.cloze.concat(result.process);
+                else currentLanguageQuiz = currentLanguageSkill.filteredItems.slice(0, 5);
+            } else {
+                currentLanguageQuiz = currentLanguageSkill.filteredItems.slice(0, 5);
+            }
+            if (currentLanguageQuiz.length < 5) {
+                alert('語言題目數不足，顯示可用題目');
+            }
+            renderLanguageQuiz();
+        }
+
+        function renderLanguageQuiz() {
+            const form = document.getElementById('language-form');
+            form.innerHTML = '';
+            currentLanguageQuiz.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.innerHTML = `<p aria-label="語言題目 ${idx+1}">${idx+1}. ${item.stem || item.q}</p>`;
+                if (item.type === 'mcq') {
+                    item.options.forEach((opt, optIdx) => {
+                        div.innerHTML += `<label><input type="radio" name="l${idx}" value="${opt}" tabindex="0" aria-label="語言題目 ${idx+1} 選項 ${optIdx+1}: ${opt}">${opt}</label><br>`;
+                    });
+                } else {
+                    div.innerHTML += `<input type="text" name="l${idx}" tabindex="0" aria-label="語言題目 ${idx+1} 填空答案">`;
+                }
+                form.appendChild(div);
+            });
+            document.getElementById('submit-language').classList.remove('hidden');
+        }
+
+        document.getElementById('submit-language').addEventListener('click', () => {
+            const form = document.getElementById('language-form');
+            const answers = Array.from(form.querySelectorAll('input[name^="l"]'));
+            if (answers.some(a => !a.value && a.type !== 'radio' || (a.type === 'radio' && !form.querySelector(`[name="${a.name}"]:checked`)))) {
+                alert('請完成所有語言題目');
+                return;
+            }
+            let score = 0;
+            const today = new Date().toISOString().split('T')[0];
+            currentLanguageQuiz.forEach((item, idx) => {
+                const answer = form.querySelector(`[name="l${idx}"]:checked`)?.value || form.querySelector(`[name="l${idx}"]`)?.value;
+                if (answer.toLowerCase() === (item.answer || item.a).toLowerCase()) score++;
+                else {
+                    if (!appState.reviews.find(r => r.itemId === item.id)) {
+                        appState.reviews.push({ itemId: item.id, nextDate: today, ef: 2.5, interval: 1, repetitions: 0 });
+                    }
+                }
+            });
+            const mastery = (score / 5) * 100;
+            appState.languageScores[`${languageSelect.value}_${languageSkillSelect.value}`] = mastery;
+            saveState();
+            const feedback = document.getElementById('language-feedback');
+            feedback.innerHTML = `<p>得分: ${score}/5</p><p>${score > 3 ? 'Great job! Keep going!' : 'Nice try! Practice more.'}</p>`;
+        });
+
+        // LLM Placeholder
+        async function callLLM(task, payload) {
+            console.log('Calling LLM for', task, payload);
+            if (task === 'diagnose') {
+                return { items: [
+                    { id: "LLM-1", level: payload.level, type: "mcq", stem: `假題目1: ${payload.skill} 定義?`, options: ["A", "B", "C", "D"], answer: "A", unit: "", explanation: "假解釋", hints: ["h1", "h2", "h3"], bloom: "Remember", errorTags: ["概念混淆"] },
+                    { id: "LLM-2", level: payload.level, type: "calc", stem: `假題目2: 2+2=?`, options: [], answer: "4", unit: "", explanation: "基本計算", hints: ["加法", "2+2", "4"], bloom: "Apply", errorTags: ["步驟遺漏"] },
+                    { id: "LLM-3", level: payload.level, type: "mcq", stem: "假題目3", options: ["A","B","C","D"], answer: "B", unit: "", explanation: "解釋", hints: ["h1","h2","h3"], bloom: "Understand", errorTags: ["邏輯"] },
+                    { id: "LLM-4", level: payload.level, type: "mcq", stem: "假題目4", options: ["A","B","C","D"], answer: "C", unit: "", explanation: "解釋", hints: ["h1","h2","h3"], bloom: "Analyze", errorTags: ["單位"] },
+                    { id: "LLM-5", level: payload.level, type: "mcq", stem: "假題目5", options: ["A","B","C","D"], answer: "D", unit: "", explanation: "解釋", hints: ["h1","h2","h3"], bloom: "Apply", errorTags: ["符號"] },
+                    { id: "LLM-6", level: payload.level, type: "mcq", stem: "假題目6", options: ["A","B","C","D"], answer: "A", unit: "", explanation: "解釋", hints: ["h1","h2","h3"], bloom: "Remember", errorTags: ["概念混淆"] },
+                    { id: "LLM-7", level: payload.level, type: "calc", stem: "假題目7: 3*3=?", options: [], answer: "9", unit: "", explanation: "乘法", hints: ["乘", "3*3", "9"], bloom: "Apply", errorTags: ["步驟遺漏"] },
+                    { id: "LLM-8", level: payload.level, type: "mcq", stem: "假題目8", options: ["A","B","C","D"], answer: "B", unit: "", explanation: "解釋", hints: ["h1","h2","h3"], bloom: "Understand", errorTags: ["邏輯"] }
+                ]};
+            } else if (task === 'analyze') {
+                return { errorType: '概念混淆', firstFault: '錯點描述', hints: ['提示1','提示2','提示3'], microLesson: {keyPoints:['定義: 測試定義','步驟: 測試步驟','口訣: 測試口訣'], example:'逐步範例: 1. 第一步 2. 第二步'}, followUp: {difficulty:'入門', item: {id: "FU-1", level: payload.level, type: "mcq", stem: "跟進題", options: ["A","B","C","D"], answer: "A", unit: "", explanation: "跟進解釋", hints: ["fh1","fh2","fh3"], errorTags: ["測試"]}} };
+            } else if (task === 'cards') {
+                return { cloze: [{q: "測試 [空格]", a: "答案"}], process: [{q: "步驟 1? 2?", a: "標準流程"}] };
+            }
+            return null;
+        }
+
+        // Init
+        updateReviewCount();
+        loadSkills();
+        loadLanguageSkills();
+    </script>
+</body>
+</html>
