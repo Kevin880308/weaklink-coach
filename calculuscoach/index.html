@@ -4,8 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>微積分 AI 自學教練</title>
+
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <!-- ✅ MathJax：一定要先放設定，再載入 script -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]']],
+      },
+      options: {
+        skipHtmlTags: ['script','noscript','style','textarea','pre','code'],
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; color: #333; transition: all 0.3s; }
@@ -27,577 +42,730 @@
     .hint-btn { background: #28a745; font-size: 0.9rem; padding: 0.4rem 0.8rem; width: auto; }
     .wrong-item { cursor: pointer; color: #d63384; margin: 0.5rem 0; }
     .wrong-item:hover { text-decoration: underline; }
+    .btn-row { display:flex; gap:8px; }
+    .btn-row button { width: 50%; }
     canvas { margin-top: 1rem; }
     footer { text-align: center; padding: 1rem; font-size: 0.8rem; color: #666; }
     .dark footer { color: #aaa; }
+    .small { font-size: 0.9rem; opacity: 0.85; }
+    .answer-box { margin-top: .6rem; padding: .8rem; border-radius: 6px; background: rgba(0,0,0,0.04); }
+    .dark .answer-box { background: rgba(255,255,255,0.08); }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <header>
-      <h1>微積分 AI 自學教練</h1>
-      <button id="theme-toggle">切換深色模式</button>
-      <button id="reset-data">重設所有資料</button>
-    </header>
+<div class="container">
+  <header>
+    <h1>微積分 AI 自學教練</h1>
+    <button id="theme-toggle">切換深色模式</button>
+    <button id="reset-data">重設所有資料</button>
+  </header>
 
-    <main>
-      <!-- 首頁 -->
-      <section id="home" class="card">
-        <h2>選擇要練習的技能</h2>
-        <select id="skill-select">
-          <option value="">請選擇技能</option>
-        </select>
-        <button id="diag-btn" disabled>1. 弱點診斷（生成小測）</button>
-        <button id="micro-btn" disabled>2. 微課補洞</button>
-        <button id="practice-btn" disabled>3. 階梯式練習</button>
-        <button id="error-btn" disabled>4. 錯誤分析 + 三層提示</button>
-        <button id="review-btn">5. 間隔複習 (今日: <span id="review-count">0</span>)</button>
-      </section>
+  <main>
+    <!-- 首頁 -->
+    <section id="home" class="card">
+      <h2>選擇要練習的技能</h2>
+      <select id="skill-select">
+        <option value="">請選擇技能</option>
+      </select>
+      <button id="diag-btn" disabled>1. 弱點診斷（生成小測）</button>
+      <button id="micro-btn" disabled>2. 微課補洞</button>
+      <button id="practice-btn" disabled>3. 階梯式練習</button>
+      <button id="review-btn">4. 間隔複習 (今日: <span id="review-count">0</span>)</button>
+      <p class="small">※ 錯誤分析會在你做完「弱點診斷」並點擊錯題後啟動</p>
+    </section>
 
-      <!-- 弱點診斷 -->
-      <section id="diagnosis" class="card hidden">
-        <h2>弱點診斷 - <span id="current-skill-name"></span></h2>
-        <button id="generate-quiz">生成小測（8題）</button>
-        <form id="quiz-form" class="hidden"></form>
-        <button id="submit-quiz" class="hidden">提交測驗</button>
-        <button id="back-home-diag">返回首頁</button>
-        <canvas id="radar-chart" class="hidden"></canvas>
-        <canvas id="progress-chart" class="hidden"></canvas>
-        <div id="wrong-list"></div>
-      </section>
+    <!-- 弱點診斷 -->
+    <section id="diagnosis" class="card hidden">
+      <h2>弱點診斷 - <span id="current-skill-name"></span></h2>
+      <button id="generate-quiz">生成小測（最多8題）</button>
+      <form id="quiz-form" class="hidden"></form>
+      <button id="submit-quiz" class="hidden">提交測驗</button>
+      <button id="back-home-diag">返回首頁</button>
+      <canvas id="radar-chart" class="hidden"></canvas>
+      <canvas id="progress-chart" class="hidden"></canvas>
+      <div id="wrong-list"></div>
+    </section>
 
-      <!-- 錯誤分析 -->
-      <section id="error-analysis" class="card hidden">
-        <h2>錯誤分析 + 三層提示</h2>
-        <div id="error-details"></div>
-        <button id="back-home-error">返回首頁</button>
-      </section>
+    <!-- 錯誤分析 -->
+    <section id="error-analysis" class="card hidden">
+      <h2>錯誤分析 + 三層提示</h2>
+      <div id="error-details"></div>
+      <button id="back-home-error">返回首頁</button>
+    </section>
 
-      <!-- 微課補洞 -->
-      <section id="micro-lesson" class="card hidden">
-        <h2>微課補洞 - <span id="lesson-skill-name"></span></h2>
-        <div id="lesson-content"></div>
-        <button id="back-home-micro">返回首頁</button>
-      </section>
+    <!-- 微課補洞 -->
+    <section id="micro-lesson" class="card hidden">
+      <h2>微課補洞 - <span id="lesson-skill-name"></span></h2>
+      <div id="lesson-content"></div>
+      <button id="back-home-micro">返回首頁</button>
+    </section>
 
-      <!-- 階梯式練習 -->
-      <section id="practice" class="card hidden">
-        <h2>階梯式練習 - <span id="practice-skill-name"></span></h2>
-        <div id="practice-questions"></div>
-        <button id="back-home-practice">返回首頁</button>
-      </section>
+    <!-- 階梯式練習 -->
+    <section id="practice" class="card hidden">
+      <h2>階梯式練習 - <span id="practice-skill-name"></span></h2>
+      <div id="practice-questions"></div>
+      <button id="back-home-practice">返回首頁</button>
+    </section>
 
-      <!-- 間隔複習 -->
-      <section id="review" class="card hidden">
-        <h2>間隔複習（今日待複習）</h2>
-        <div id="review-cards"></div>
-        <button id="back-home-review">返回首頁</button>
-      </section>
-    </main>
+    <!-- 間隔複習 -->
+    <section id="review" class="card hidden">
+      <h2>間隔複習（今日待複習）</h2>
+      <div id="review-cards"></div>
+      <button id="back-home-review">返回首頁</button>
+    </section>
+  </main>
 
-    <footer>
-      <p>學習用途，請勿上傳未公開考題。</p>
-    </footer>
-  </div>
+  <footer>
+    <p>學習用途，請勿上傳未公開考題。</p>
+  </footer>
+</div>
 
-  <script>
-    // ==================== MathJax 安全渲染工具 ====================
-    // 你的題庫裡為了 JS 字串安全，會用 "\\(" "\\)"。
-    // 但插入 DOM 後需要把 "\\(" 轉回 "\(" 才能被 MathJax 正常吃到。
-    function renderMath(html) {
-      return String(html)
-        .replace(/\\\\\(/g, "\\(")
-        .replace(/\\\\\)/g, "\\)");
+<script>
+/* ==================== 題庫資料 ==================== */
+/* ✅ 建議：題幹直接用 MathJax 的 \\( \\) 包住，這份已可正常渲染 */
+const skills = [
+  {
+    id: "Derivative_Optimization",
+    name: "導數應用－極值",
+    items: [
+      { id: "DO-1", type: "mcq", stem: "函數 \\( f(x) = x^2 - 4x + 3 \\) 的極小值在 \\( x = ? \\)", options: ["1", "2", "3", "4"], answer: "2", explanation: "求導 \\( f'(x)=2x-4=0 \\Rightarrow x=2 \\)，二階導 \\( f''(x)=2>0 \\) 極小", hints: ["先求一階導數", "設導數等於0解x", "用二階導數判別極值類型"] },
+      { id: "DO-2", type: "calc", stem: "計算 \\( (x^3)' = ? \\)", answer: "3x^2", explanation: "功率規則：\\( d/dx(x^n)=n x^{n-1} \\)", hints: ["回想功率規則", "指數減1", "係數乘下來"] },
+      { id: "DO-3", type: "mcq", stem: "判斷極值類型主要用？", options: ["一階導數", "二階導數", "三階導數", "積分"], answer: "二階導數", explanation: "二階導 \\(>0\\) 極小，\\(<0\\) 極大", hints: ["一階導找臨界點", "二階導判凹凸", "正→極小，負→極大"] },
+      { id: "DO-4", type: "calc", stem: "計算 \\( (4x^2 - 2x + 1)' = ? \\)", answer: "8x - 2", explanation: "逐項求導", hints: ["功率規則應用到每項", "常數導數為0", "線性項導數為係數"] },
+      { id: "DO-5", type: "mcq", stem: "函數 \\( f(x) = -x^2 + 2x \\) 的極大值在 \\( x = ? \\)", options: ["0", "1", "2", "3"], answer: "1", explanation: "\\( f'(x)=-2x+2=0\\Rightarrow x=1\\)，\\( f''(x)=-2<0\\) 極大", hints: ["求導設零", "二階導負為極大", "驗證"] },
+      { id: "DO-6", type: "calc", stem: "找 \\( f(x) = x^3 - 3x \\) 的臨界點", answer: "x=1, x=-1", explanation: "\\( f'(x)=3x^2-3=0 \\Rightarrow x^2=1 \\Rightarrow x=\\pm1 \\)", hints: ["一階導數", "解方程", "平方根"] },
+      { id: "DO-7", type: "mcq", stem: "若 \\( f''(c)>0 \\)，則 \\( c \\) 是？", options: ["極大點", "極小點", "拐點", "無"], answer: "極小點", explanation: "二階導正為凹向上，極小", hints: ["凹凸性", "二階測試", "符號意義"] },
+      { id: "DO-8", type: "calc", stem: "計算 \\( f(x) = x^4 \\) 的極值", answer: "極小值在 x=0", explanation: "\\( f'(x)=4x^3=0 \\Rightarrow x=0\\)。二階為0需做一階符號測試，但可判為極小", hints: ["二階為0需一階符號測試", "左右導數符號", "正負變化"] },
+      { id: "DO-9", type: "mcq", stem: "絕對極值需檢查？", options: ["僅臨界點", "臨界點+端點", "僅端點", "無"], answer: "臨界點+端點", explanation: "閉區間極值定理", hints: ["閉區間", "評估所有點", "比較值"] },
+      { id: "DO-10", type: "calc", stem: "在 \\([0,2]\\) 找 \\( f(x)=x^2-2x \\) 絕對最大", answer: "0 at x=0 or x=2", explanation: "臨界 \\(x=1\\) 得 \\(f(1)=-1\\)，端點 \\(f(0)=0,f(2)=0\\)，最大為0", hints: ["端點+臨界", "計算值", "比較"] }
+    ],
+    microLesson: {
+      keyPoints: [
+        "極值：局部最大或最小",
+        "臨界點：\\(f'(x)=0\\) 或不存在",
+        "二階判別：\\(f''>0\\) 極小、\\(f''<0\\) 極大"
+      ],
+      example:
+        "\\( f(x)=x^2-4x+3 \\)<br>" +
+        "\\( f'(x)=2x-4=0 \\Rightarrow x=2 \\)<br>" +
+        "\\( f''(x)=2>0 \\Rightarrow x=2 \\) 為極小，且 \\( f(2)=-1 \\)"
+    }
+  },
+  {
+    id: "Chain_Rule",
+    name: "鏈鎖規則",
+    items: [
+      { id: "CR-1", type: "mcq", stem: "\\( \\frac{d}{dx}[(x^2+1)^3] = ? \\)", options: ["3(x^2+1)^2 \\cdot 2x", "3(x^2+1)^2", "9(x^2+1)^2 \\cdot 2x", "6x(x^2+1)^2"], answer: "3(x^2+1)^2 \\cdot 2x", explanation: "外層導 \\(3u^2\\)，內層 \\(u=x^2+1\\) 導 \\(2x\\)", hints: ["先看外層函數", "外層導數保留內層", "乘上內層導數"] },
+      { id: "CR-2", type: "calc", stem: "計算 \\( \\frac{d}{dx} e^{2x} \\)", answer: "2e^{2x}", explanation: "\\( (e^u)' = e^u \\cdot u' \\)", hints: ["e的導數還是e", "別忘了乘內層導數", "內層是2x所以乘2"] },
+      { id: "CR-3", type: "mcq", stem: "計算 \\( \\frac{d}{dx}\\sin(3x) \\)", options: ["3\\cos(3x)", "\\cos(3x)", "3\\sin(3x)", "-3\\cos(3x)"], answer: "3\\cos(3x)", explanation: "\\( (\\sin u)'=\\cos u \\cdot u' \\)", hints: ["三角導數", "鏈鎖乘內導", "係數"] },
+      { id: "CR-4", type: "calc", stem: "計算 \\( \\frac{d}{dx}\\ln(x^2+1) \\)", answer: "\\frac{2x}{x^2+1}", explanation: "\\( (\\ln u)' = \\frac{u'}{u} \\)", hints: ["對數導數", "分式", "內導"] },
+      { id: "CR-5", type: "mcq", stem: "多層複合如 \\( [(2x+1)^2]^3 \\)", options: ["需多次鏈鎖", "僅外層", "忽略內層", "無"], answer: "需多次鏈鎖", explanation: "最外 \\(^3\\) → 次外 \\(^2\\) → 內 \\(2x+1\\)", hints: ["層層拆解", "外導內乘下一層", "逐步"] },
+      { id: "CR-6", type: "calc", stem: "計算 \\( \\frac{d}{dx}(e^{x^2}) \\)", answer: "2x e^{x^2}", explanation: "\\( (e^u)'=e^u u'\\)，\\(u=x^2\\Rightarrow u'=2x\\)", hints: ["指數", "內層平方", "乘2x"] },
+      { id: "CR-7", type: "mcq", stem: "計算 \\( \\frac{d}{dx}\\sqrt{4x+1} \\)", options: ["\\frac{2}{\\sqrt{4x+1}}", "\\frac{4}{\\sqrt{4x+1}}", "\\frac{1}{2\\sqrt{4x+1}}\\cdot 4", "無"], answer: "\\frac{1}{2\\sqrt{4x+1}}\\cdot 4", explanation: "\\( u^{1/2}\\Rightarrow \\frac12 u^{-1/2}\\cdot u'\\)", hints: ["根號為1/2次", "負指數", "內導4"] },
+      { id: "CR-8", type: "calc", stem: "計算 \\( \\frac{d}{dx}\\cos(e^x) \\)", answer: "-\\sin(e^x)\\cdot e^x", explanation: "\\( (\\cos u)'=-\\sin u\\cdot u'\\)", hints: ["負號", "三角+指數", "鏈鎖"] },
+      { id: "CR-9", type: "mcq", stem: "鏈鎖規則適用於？", options: ["複合函數", "簡單多項式", "常數", "無"], answer: "複合函數", explanation: "\\( (f(g(x)))' = f'(g(x))g'(x) \\)", hints: ["f∘g", "外內", "乘積"] },
+      { id: "CR-10", type: "calc", stem: "計算 \\( \\frac{d}{dx}(x\\sin x) \\)", answer: "\\sin x + x\\cos x", explanation: "積規則：\\( (uv)'=u'v+uv' \\)", hints: ["辨識規則", "積= u'v + uv'", "混合"] }
+    ],
+    microLesson: {
+      keyPoints: [
+        "複合函數導數 = 外導 × 內導",
+        "口訣：外導內，乘內導",
+        "可多層連鎖使用"
+      ],
+      example:
+        "\\( (x^2+1)^3 \\)<br>" +
+        "令 \\(u=x^2+1\\)，原式 \\(=u^3\\)<br>" +
+        "\\( \\frac{d}{dx}=3u^2\\cdot 2x = 3(x^2+1)^2\\cdot 2x \\)"
+    }
+  }
+];
+
+/* ==================== 儲存 Key ==================== */
+const STORAGE_KEY = "calcCoachData";
+const THEME_KEY = "calcCoachTheme";
+
+/* ==================== 全域變數 ==================== */
+let currentSkill = null;
+let currentQuiz = [];
+let radarChart = null;
+let progressChart = null;
+
+let storage = {
+  records: {}, // skillId -> { dates: { "YYYY-MM-DD": {correct,total} }, wrongs: [itemId...] }
+  reviews: {}  // itemId -> { nextReview: "YYYY-MM-DD", interval: number }
+};
+
+/* ==================== 小工具：MathJax 安全渲染 ==================== */
+function renderMath() {
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    return window.MathJax.typesetPromise();
+  }
+  return Promise.resolve();
+}
+
+/* ==================== 初始化 ==================== */
+document.addEventListener("DOMContentLoaded", async () => {
+  loadFromStorage();
+  populateSkillSelect();
+  updateReviewCount();
+  setupEventListeners();
+  applyTheme();
+  await renderMath();
+});
+
+/* ==================== UI：技能下拉 ==================== */
+function populateSkillSelect() {
+  const select = document.getElementById("skill-select");
+  // 避免重複塞入（熱重載或重複呼叫會發生）
+  select.querySelectorAll("option:not([value=''])").forEach(o => o.remove());
+
+  skills.forEach(skill => {
+    const opt = document.createElement("option");
+    opt.value = skill.id;
+    opt.textContent = skill.name;
+    select.appendChild(opt);
+  });
+}
+
+function setupEventListeners() {
+  document.getElementById("theme-toggle").onclick = toggleTheme;
+  document.getElementById("reset-data").onclick = resetAllData;
+
+  document.getElementById("skill-select").onchange = () => {
+    const id = document.getElementById("skill-select").value;
+    currentSkill = skills.find(s => s.id === id) || null;
+
+    const disabled = !currentSkill;
+    ["diag-btn", "micro-btn", "practice-btn"].forEach(btnId => {
+      document.getElementById(btnId).disabled = disabled;
+    });
+  };
+
+  // 首頁
+  document.getElementById("diag-btn").onclick = () => showSection("diagnosis");
+  document.getElementById("micro-btn").onclick = () => showMicroLesson();
+  document.getElementById("practice-btn").onclick = () => showPractice();
+  document.getElementById("review-btn").onclick = () => showReview();
+
+  // 診斷頁
+  document.getElementById("generate-quiz").onclick = generateQuiz;
+  document.getElementById("submit-quiz").onclick = submitQuiz;
+  document.getElementById("back-home-diag").onclick = () => showSection("home");
+
+  // 返回
+  document.getElementById("back-home-error").onclick = () => showSection("home");
+  document.getElementById("back-home-micro").onclick = () => showSection("home");
+  document.getElementById("back-home-practice").onclick = () => showSection("home");
+  document.getElementById("back-home-review").onclick = () => showSection("home");
+}
+
+/* ==================== 頁面切換 ==================== */
+function showSection(sectionId) {
+  document.querySelectorAll("section").forEach(sec => sec.classList.add("hidden"));
+  document.getElementById(sectionId).classList.remove("hidden");
+
+  if (sectionId === "diagnosis") {
+    if (!currentSkill) {
+      alert("請先在首頁選擇技能");
+      showSection("home");
+      return;
+    }
+    document.getElementById("current-skill-name").textContent = currentSkill.name;
+  }
+}
+
+/* ==================== 測驗：生成 ==================== */
+async function generateQuiz() {
+  if (!currentSkill) {
+    alert("請先選擇技能");
+    return;
+  }
+
+  const items = currentSkill.items;
+  currentQuiz = [...items].sort(() => Math.random() - 0.5).slice(0, Math.min(8, items.length));
+
+  const form = document.getElementById("quiz-form");
+  form.innerHTML = "";
+  form.classList.remove("hidden");
+
+  currentQuiz.forEach((q, i) => {
+    const div = document.createElement("div");
+    div.className = "question";
+
+    div.innerHTML = `<strong>${i + 1}. ${q.stem}</strong><div style="margin-top:.6rem"></div>`;
+
+    if (q.type === "mcq") {
+      q.options.forEach(opt => {
+        const id = `q${i}_${opt}`;
+        div.innerHTML += `
+          <label>
+            <input type="radio" name="q${i}" value="${opt}">
+            ${opt}
+          </label><br>
+        `;
+      });
+    } else {
+      div.innerHTML += `<input type="text" name="q${i}" placeholder="請輸入答案" style="width:100%;padding:0.5rem;margin-top:0.5rem;">`;
     }
 
-    function safeTypeset() {
-      if (window.MathJax && MathJax.typeset) MathJax.typeset();
+    form.appendChild(div);
+  });
+
+  document.getElementById("submit-quiz").classList.remove("hidden");
+  await renderMath();
+}
+
+/* ==================== 測驗：提交 ==================== */
+async function submitQuiz() {
+  const form = document.getElementById("quiz-form");
+  let correct = 0;
+  const wrongs = [];
+
+  currentQuiz.forEach((q, i) => {
+    let userAns = null;
+    if (q.type === "mcq") {
+      const selected = form.querySelector(`input[name="q${i}"]:checked`);
+      userAns = selected ? selected.value : null;
+    } else {
+      userAns = (form.querySelector(`input[name="q${i}"]`)?.value || "").trim();
     }
 
-    // ==================== 題庫資料 ====================
-    const skills = [
-      {
-        id: "Derivative_Optimization",
-        name: "導數應用－極值",
-        items: [
-          { id: "DO-1", type: "mcq", stem: "函數 \\\\( f(x) = x^2 - 4x + 3 \\\\) 的極小值在 \\\\( x = ? \\\\)", options: ["1", "2", "3", "4"], answer: "2", explanation: "求導 \\\\( f'(x)=2x-4=0 \\\\Rightarrow x=2 \\\\)，二階導 \\\\( f''(x)=2>0 \\\\) 極小", hints: ["先求一階導數", "設導數等於0解x", "用二階導數判別極值類型"], errorTags: ["概念混淆"] },
-          { id: "DO-2", type: "calc", stem: "計算 \\\\( (x^3)' = ? \\\\)", answer: "3x^2", explanation: "功率規則：\\\\( d/dx(x^n)=n x^{n-1} \\\\)", hints: ["回想功率規則", "指數減1", "係數乘下來"], errorTags: ["步驟遺漏"] },
-          { id: "DO-3", type: "mcq", stem: "判斷極值類型主要用？", options: ["一階導數", "二階導數", "三階導數", "積分"], answer: "二階導數", explanation: "二階導 >0 極小，<0 極大", hints: ["一階導找臨界點", "二階導判凹凸", "正→極小，負→極大"], errorTags: ["邏輯"] },
-          { id: "DO-4", type: "calc", stem: "計算 \\\\( (4x^2 - 2x + 1)' = ? \\\\)", answer: "8x - 2", explanation: "逐項求導", hints: ["功率規則應用到每項", "常數導數為0", "線性項導數為係數"], errorTags: ["計算錯誤"] },
-          { id: "DO-5", type: "mcq", stem: "函數 \\\\( f(x) = -x^2 + 2x \\\\) 的極大值在 \\\\( x = ? \\\\)", options: ["0", "1", "2", "3"], answer: "1", explanation: "f'(x)=-2x+2=0 ⇒ x=1, f''(x)=-2<0 極大", hints: ["求導設零", "二階導負為極大", "驗證"], errorTags: ["符號錯誤"] },
-          { id: "DO-6", type: "calc", stem: "找 \\\\( f(x) = x^3 - 3x \\\\) 的臨界點", answer: "x=1, x=-1", explanation: "f'(x)=3x^2-3=0 ⇒ x^2=1 ⇒ x=±1", hints: ["一階導數", "解方程", "平方根"], errorTags: ["解方程"] },
-          { id: "DO-7", type: "mcq", stem: "若 f''(c)>0，則 c 是？", options: ["極大點", "極小點", "拐點", "無"], answer: "極小點", explanation: "二階導正為凹向上，極小", hints: ["凹凸性", "二階測試", "符號意義"], errorTags: ["概念"] },
-          { id: "DO-8", type: "calc", stem: "計算 \\\\( f(x) = x^4 \\\\) 的極值", answer: "極小值在 x=0", explanation: "f'(x)=4x^3=0 ⇒ x=0, f''(x)=12x^2=0 (需更高階), 但實際為極小", hints: ["二階為0需一階符號測試", "左右導數符號", "正負變化"], errorTags: ["邊界"] },
-          { id: "DO-9", type: "mcq", stem: "絕對極值需檢查？", options: ["僅臨界點", "臨界點+端點", "僅端點", "無"], answer: "臨界點+端點", explanation: "閉區間極值定理", hints: ["閉區間", "評估所有點", "比較值"], errorTags: ["範圍"] },
-          { id: "DO-10", type: "calc", stem: "在 [0,2] 找 \\\\( f(x)=x^2-2x \\\\) 絕對最大", answer: "0 at x=0 or x=2", explanation: "臨界 x=1 f(1)=-1, 端點 f(0)=0, f(2)=0, 最大0", hints: ["端點+臨界", "計算值", "比較"], errorTags: ["評估"] }
-        ],
-        microLesson: {
-          keyPoints: ["1. 極值定義：局部最大或最小", "2. 找臨界點：f'(x)=0 或不存在", "3. 二階導判別：f'' >0 極小，f'' <0 極大"],
-          example: "\\\\( f(x)=x^2-4x+3 \\\\)<br>\\\\( f'(x)=2x-4=0 \\\\Rightarrow x=2 \\\\)<br>\\\\( f''(x)=2>0 \\\\Rightarrow x=2 \\\\) 為極小值，\\\\( f(2)=-1 \\\\)"
-        }
-      },
-      {
-        id: "Chain_Rule",
-        name: "鏈鎖規則",
-        items: [
-          { id: "CR-1", type: "mcq", stem: "\\\\( d/dx [(x^2+1)^3] = ? \\\\)", options: ["3(x^2+1)^2 \\\\cdot 2x", "3(x^2+1)^2", "9(x^2+1)^2 \\\\cdot 2x", "6x(x^2+1)^2"], answer: "3(x^2+1)^2 \\\\cdot 2x", explanation: "外層³次方導 3u²，內層 x²+1 導 2x", hints: ["先看外層函數", "外層導數保留內層", "乘上內層導數"], errorTags: ["步驟遺漏"] },
-          { id: "CR-2", type: "calc", stem: "\\\\( d/dx e^{2x} = ? \\\\)", answer: "2e^{2x}", explanation: "\\\\( e^u \\\\) 的導數是 \\\\( e^u \\\\cdot u' \\\\)", hints: ["e的導數還是e", "別忘了乘內層導數", "內層是2x所以乘2"], errorTags: ["概念混淆"] },
-          { id: "CR-3", type: "mcq", stem: "\\\\( d/dx \\\\sin(3x) = ? \\\\)", options: ["3\\\\cos(3x)", "\\\\cos(3x)", "3\\\\sin(3x)", "-3\\\\cos(3x)"], answer: "3\\\\cos(3x)", explanation: "外 sin u 導 cos u, 內 3x 導 3", hints: ["三角導數", "鏈鎖乘內導", "係數"], errorTags: ["三角"] },
-          { id: "CR-4", type: "calc", stem: "\\\\( d/dx \\\\ln(x^2 + 1) = ? \\\\)", answer: "\\\\frac{2x}{x^2 + 1}", explanation: "ln u 導 1/u · u'", hints: ["對數導數", "分式", "內導"], errorTags: ["分數"] },
-          { id: "CR-5", type: "mcq", stem: "多層複合如 \\\\( [(2x+1)^2]^3 \\\\)", options: ["需多次鏈鎖", "僅外層", "忽略內層", "無"], answer: "需多次鏈鎖", explanation: "最外 ^3, 次外 ^2, 內 2x+1", hints: ["層層拆解", "外導內乘下一層", "逐步"], errorTags: ["多層"] },
-          { id: "CR-6", type: "calc", stem: "\\\\( d/dx (e^{x^2}) = ? \\\\)", answer: "2x e^{x^2}", explanation: "e^u u=x^2 u'=2x", hints: ["指數", "內層平方", "乘2x"], errorTags: ["指數"] },
-          { id: "CR-7", type: "mcq", stem: "\\\\( d/dx \\\\sqrt{4x+1} = ? \\\\)", options: ["\\\\frac{2}{\\\\sqrt{4x+1}}", "\\\\frac{4}{\\\\sqrt{4x+1}}", "\\\\frac{1}{2\\\\sqrt{4x+1}} \\\\cdot 4", "無"], answer: "\\\\frac{1}{2\\\\sqrt{4x+1}} \\\\cdot 4", explanation: "u^{1/2} 導 (1/2)u^{-1/2} · u'", hints: ["根號為1/2次", "負指數", "內導4"], errorTags: ["根號"] },
-          { id: "CR-8", type: "calc", stem: "\\\\( d/dx \\\\cos(e^x) = ? \\\\)", answer: "-\\\\sin(e^x) \\\\cdot e^x", explanation: "cos u 導 -sin u · u'", hints: ["負號", "三角+指數", "鏈鎖"], errorTags: ["負號"] },
-          { id: "CR-9", type: "mcq", stem: "鏈鎖規則適用於？", options: ["複合函數", "簡單多項式", "常數", "無"], answer: "複合函數", explanation: "f(g(x))' = f'(g(x)) g'(x)", hints: ["f o g", "外內", "乘積"], errorTags: ["適用"] },
-          { id: "CR-10", type: "calc", stem: "\\\\( d/dx (x \\\\sin x) = ? \\\\)", answer: "\\\\sin x + x \\\\cos x", explanation: "積規則，非純鏈鎖", hints: ["辨識規則", "積= u'v + uv'", "混合"], errorTags: ["規則混"] }
-        ],
-        microLesson: {
-          keyPoints: ["1. 複合函數導數 = 外函數導數 × 內函數導數", "2. 口訣：外導內，乘內導", "3. 可多層連鎖使用"],
-          example: "\\\\( (x^2+1)^3 \\\\)<br>讓 u = x^2+1，則原函數 = u^3<br>d/dx = 3u^2 \\\\cdot 2x = 3(x^2+1)^2 \\\\cdot 2x"
-        }
+    // ✅ 更寬鬆比較（calc 題）
+    const isCorrect = q.type === "calc"
+      ? normalizeAns(userAns) === normalizeAns(q.answer)
+      : userAns === q.answer;
+
+    if (isCorrect) correct++;
+    else wrongs.push(q);
+  });
+
+  const score = Math.round((correct / currentQuiz.length) * 100);
+  alert(`測驗完成！正確率：${score}%`);
+
+  saveQuizRecord(correct, currentQuiz.length, wrongs);
+
+  showRadarChart();
+  showProgressChart();
+  showWrongList(wrongs);
+
+  document.getElementById("submit-quiz").classList.add("hidden");
+  await renderMath();
+}
+
+/* ==================== 儲存：測驗紀錄 + 複習排程 ==================== */
+function saveQuizRecord(correct, total, wrongItems) {
+  const today = new Date().toISOString().split("T")[0];
+
+  if (!storage.records[currentSkill.id]) storage.records[currentSkill.id] = { dates: {}, wrongs: [] };
+  storage.records[currentSkill.id].dates[today] = { correct, total };
+
+  // ✅ 錯題加入複習排程：明天複習
+  wrongItems.forEach(item => {
+    if (!storage.records[currentSkill.id].wrongs.includes(item.id)) {
+      storage.records[currentSkill.id].wrongs.push(item.id);
+    }
+    storage.reviews[item.id] = {
+      nextReview: addDays(today, 1),
+      interval: 1
+    };
+  });
+
+  saveToStorage();
+  updateReviewCount();
+}
+
+/* ==================== 圖表 ==================== */
+function showRadarChart() {
+  const canvas = document.getElementById("radar-chart");
+  canvas.classList.remove("hidden");
+
+  const data = skills.map(s => {
+    const rec = storage.records[s.id];
+    if (!rec || !rec.dates || Object.keys(rec.dates).length === 0) return 0;
+    const rates = Object.values(rec.dates).map(d => (d.correct / d.total) * 100);
+    return Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
+  });
+
+  if (radarChart) radarChart.destroy();
+  radarChart = new Chart(canvas, {
+    type: "radar",
+    data: {
+      labels: skills.map(s => s.name),
+      datasets: [{ label: "掌握度 (%)", data }]
+    },
+    options: {
+      scales: { r: { beginAtZero: true, max: 100 } }
+    }
+  });
+}
+
+function showProgressChart() {
+  const canvas = document.getElementById("progress-chart");
+  canvas.classList.remove("hidden");
+
+  const last7 = getLast7Days();
+  const rates = last7.map(date => {
+    const rec = storage.records[currentSkill.id]?.dates?.[date];
+    return rec ? Math.round((rec.correct / rec.total) * 100) : null;
+  });
+
+  if (progressChart) progressChart.destroy();
+  progressChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: last7.map(d => d.slice(5)),
+      datasets: [{ label: "正確率 (%)", data: rates, spanGaps: true }]
+    },
+    options: { scales: { y: { min: 0, max: 100 } } }
+  });
+}
+
+/* ==================== 錯題清單（可點進錯誤分析） ==================== */
+async function showWrongList(wrongs) {
+  const div = document.getElementById("wrong-list");
+  div.innerHTML = "";
+
+  if (wrongs.length === 0) {
+    div.innerHTML = "<p>恭喜！本次全對！</p>";
+    return;
+  }
+
+  div.innerHTML = "<h3>錯題（點擊進入錯誤分析）</h3>";
+  wrongs.forEach(q => {
+    const p = document.createElement("p");
+    p.className = "wrong-item";
+    p.innerHTML = q.stem; // ✅ 讓 MathJax 直接渲染題幹
+    p.onclick = () => showErrorAnalysis(q);
+    div.appendChild(p);
+  });
+
+  await renderMath();
+}
+
+/* ==================== ✅ 錯誤分析（修好三層提示按鈕） ==================== */
+async function showErrorAnalysis(question) {
+  showSection("error-analysis");
+
+  const div = document.getElementById("error-details");
+  div.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "question";
+
+  wrap.innerHTML = `
+    <p><strong>題目：</strong> ${question.stem}</p>
+    <p><strong>你的常見卡點：</strong>（可用提示逐步拆解）</p>
+    <p><strong>正確答案：</strong> ${question.answer}</p>
+    <p><strong>詳解：</strong> ${question.explanation}</p>
+    <h4>三層提示</h4>
+  `;
+
+  // ✅ 用 JS 控制「逐層解鎖」
+  const hints = question.hints || [];
+  const hintArea = document.createElement("div");
+
+  let idx = 0;
+  const btn = document.createElement("button");
+  btn.className = "hint-btn";
+  btn.textContent = "顯示第一層提示";
+
+  btn.onclick = () => {
+    if (idx >= hints.length) return;
+
+    const p = document.createElement("p");
+    p.textContent = `提示 ${idx + 1}：${hints[idx]}`;
+    hintArea.appendChild(p);
+    idx++;
+
+    if (idx === 1) btn.textContent = "顯示第二層提示";
+    else if (idx === 2) btn.textContent = "顯示第三層提示";
+    else btn.style.display = "none";
+  };
+
+  wrap.appendChild(btn);
+  wrap.appendChild(hintArea);
+
+  div.appendChild(wrap);
+  await renderMath();
+}
+
+/* ==================== ✅ 微課補洞（修好列表渲染與 MathJax） ==================== */
+async function showMicroLesson() {
+  if (!currentSkill) {
+    alert("請先選擇技能");
+    return;
+  }
+
+  showSection("micro-lesson");
+  document.getElementById("lesson-skill-name").textContent = currentSkill.name;
+
+  const lesson = currentSkill.microLesson;
+  const content = document.getElementById("lesson-content");
+
+  content.innerHTML = `
+    <h3>重點整理</h3>
+    <ul>
+      ${lesson.keyPoints.map(p => `<li>${p}</li>`).join("")}
+    </ul>
+    <h3>範例</h3>
+    <p>${lesson.example}</p>
+  `;
+
+  await renderMath();
+}
+
+/* ==================== ✅ 階梯式練習（新增：可作答 + 看詳解） ==================== */
+async function showPractice() {
+  if (!currentSkill) {
+    alert("請先選擇技能");
+    return;
+  }
+
+  showSection("practice");
+  document.getElementById("practice-skill-name").textContent = currentSkill.name;
+
+  const items = [...currentSkill.items].sort(() => Math.random() - 0.5).slice(0, 5);
+  const div = document.getElementById("practice-questions");
+  div.innerHTML = "<h3>開始練習！</h3>";
+
+  items.forEach((q, i) => {
+    const qdiv = document.createElement("div");
+    qdiv.className = "question";
+    qdiv.innerHTML = `<strong>${i + 1}. ${q.stem}</strong>`;
+
+    // 作答區
+    const inputArea = document.createElement("div");
+    inputArea.style.marginTop = ".6rem";
+
+    if (q.type === "mcq") {
+      q.options.forEach(opt => {
+        inputArea.innerHTML += `
+          <label><input type="radio" name="p${i}" value="${opt}"> ${opt}</label><br>
+        `;
+      });
+    } else {
+      inputArea.innerHTML += `<input type="text" name="p${i}" placeholder="請輸入答案" style="width:100%;padding:0.5rem;margin-top:0.5rem;">`;
+    }
+
+    // 按鈕：檢查 / 看詳解
+    const btnRow = document.createElement("div");
+    btnRow.className = "btn-row";
+
+    const checkBtn = document.createElement("button");
+    checkBtn.textContent = "檢查答案";
+    const revealBtn = document.createElement("button");
+    revealBtn.textContent = "查看詳解";
+
+    const ansBox = document.createElement("div");
+    ansBox.className = "answer-box hidden";
+
+    checkBtn.onclick = () => {
+      let userAns = null;
+      if (q.type === "mcq") {
+        const selected = qdiv.querySelector(`input[name="p${i}"]:checked`);
+        userAns = selected ? selected.value : null;
+      } else {
+        userAns = (qdiv.querySelector(`input[name="p${i}"]`)?.value || "").trim();
       }
-    ];
 
-    // ==================== 全域變數 ====================
-    let currentSkill = null;
-    let currentQuiz = [];
-    let userAnswers = {};
-    let radarChart = null;
-    let progressChart = null;
+      const ok = q.type === "calc"
+        ? normalizeAns(userAns) === normalizeAns(q.answer)
+        : userAns === q.answer;
 
-    let storage = {
-      records: {}, // skillId -> { dates: {"YYYY-MM-DD": {correct,total}}, wrongs:[id...] }
-      reviews: {}  // itemId -> { nextReview:"YYYY-MM-DD", interval:number }
+      ansBox.classList.remove("hidden");
+      ansBox.innerHTML = ok
+        ? `<p><strong>✅ 正確！</strong></p>`
+        : `<p><strong>❌ 不正確</strong></p><p>你的答案：${userAns ?? "（未作答）"}</p>`;
     };
 
-    // ==================== 初始化 ====================
-    document.addEventListener("DOMContentLoaded", () => {
-      loadFromStorage();
-      populateSkillSelect();
-      updateReviewCount();
-      setupEventListeners();
-      applyTheme();
-    });
-
-    function populateSkillSelect() {
-      const select = document.getElementById("skill-select");
-      select.innerHTML = `<option value="">請選擇技能</option>`;
-      skills.forEach(skill => {
-        const opt = document.createElement("option");
-        opt.value = skill.id;
-        opt.textContent = skill.name;
-        select.appendChild(opt);
-      });
-    }
-
-    function setupEventListeners() {
-      document.getElementById("theme-toggle").onclick = toggleTheme;
-      document.getElementById("reset-data").onclick = resetAllData;
-
-      document.getElementById("skill-select").onchange = () => {
-        const selectedId = document.getElementById("skill-select").value;
-        currentSkill = skills.find(s => s.id === selectedId) || null;
-        const disabled = !currentSkill;
-        ["diag-btn", "micro-btn", "practice-btn", "error-btn"].forEach(id => {
-          document.getElementById(id).disabled = disabled;
-        });
-      };
-
-      document.getElementById("diag-btn").onclick = () => {
-        if (!currentSkill) return alert("請先選擇技能");
-        showSection("diagnosis");
-      };
-
-      document.getElementById("micro-btn").onclick = () => {
-        if (!currentSkill) return alert("請先選擇技能");
-        showMicroLesson();
-      };
-
-      document.getElementById("practice-btn").onclick = () => {
-        if (!currentSkill) return alert("請先選擇技能");
-        showPractice();
-      };
-
-      document.getElementById("review-btn").onclick = () => showReview();
-
-      document.getElementById("generate-quiz").onclick = generateQuiz;
-      document.getElementById("submit-quiz").onclick = submitQuiz;
-      document.getElementById("back-home-diag").onclick = () => showSection("home");
-
-      document.getElementById("back-home-error").onclick = () => showSection("home");
-      document.getElementById("back-home-micro").onclick = () => showSection("home");
-      document.getElementById("back-home-practice").onclick = () => showSection("home");
-      document.getElementById("back-home-review").onclick = () => showSection("home");
-    }
-
-    // ==================== 頁面切換 ====================
-    function showSection(sectionId) {
-      document.querySelectorAll("section").forEach(sec => sec.classList.add("hidden"));
-      document.getElementById(sectionId).classList.remove("hidden");
-
-      if (sectionId === "diagnosis") {
-        if (!currentSkill) {
-          alert("請先在首頁選擇技能");
-          showSection("home");
-          return;
-        }
-        document.getElementById("current-skill-name").textContent = currentSkill.name;
-        document.getElementById("wrong-list").innerHTML = "";
-        document.getElementById("quiz-form").classList.add("hidden");
-        document.getElementById("quiz-form").innerHTML = "";
-        document.getElementById("submit-quiz").classList.add("hidden");
-      }
-    }
-
-    // ==================== 測驗相關 ====================
-    function generateQuiz() {
-      if (!currentSkill) return alert("請先選擇技能");
-
-      const items = currentSkill.items || [];
-      currentQuiz = [...items].sort(() => 0.5 - Math.random()).slice(0, Math.min(8, items.length));
-      userAnswers = {};
-
-      const form = document.getElementById("quiz-form");
-      form.innerHTML = "";
-      form.classList.remove("hidden");
-
-      currentQuiz.forEach((q, i) => {
-        const div = document.createElement("div");
-        div.className = "question";
-
-        // ✅ 這裡要 renderMath
-        div.innerHTML = `<strong>${i + 1}. ${renderMath(q.stem)}</strong>`;
-
-        if (q.type === "mcq") {
-          q.options.forEach(opt => {
-            div.innerHTML += `
-              <label>
-                <input type="radio" name="q${i}" value="${opt}">
-                ${opt}
-              </label><br>`;
-          });
-        } else if (q.type === "calc") {
-          div.innerHTML += `<input type="text" name="q${i}" placeholder="請輸入答案" style="width:100%;padding:0.5rem;margin-top:0.5rem;">`;
-        }
-
-        form.appendChild(div);
-      });
-
-      document.getElementById("submit-quiz").classList.remove("hidden");
-      safeTypeset();
-    }
-
-    function submitQuiz() {
-      const form = document.getElementById("quiz-form");
-      let correct = 0;
-      const wrongs = [];
-
-      currentQuiz.forEach((q, i) => {
-        let userAns;
-        if (q.type === "mcq") {
-          const selected = form.querySelector(`input[name="q${i}"]:checked`);
-          userAns = selected ? selected.value : null;
-        } else {
-          const input = form.querySelector(`input[name="q${i}"]`);
-          userAns = input ? input.value.trim() : "";
-        }
-
-        userAnswers[q.id] = userAns;
-
-        if (userAns === q.answer) correct++;
-        else wrongs.push(q);
-      });
-
-      const score = Math.round((correct / currentQuiz.length) * 100);
-      alert(`測驗完成！正確率：${score}%`);
-
-      saveQuizRecord(correct, currentQuiz.length, wrongs);
-
-      showRadarChart();
-      showProgressChart();
-      showWrongList(wrongs);
-
-      document.getElementById("submit-quiz").classList.add("hidden");
-    }
-
-    function saveQuizRecord(correct, total, wrongItems) {
-      const today = new Date().toISOString().split("T")[0];
-      if (!storage.records[currentSkill.id]) storage.records[currentSkill.id] = { dates: {}, wrongs: [] };
-
-      storage.records[currentSkill.id].dates[today] = { correct, total };
-
-      wrongItems.forEach(item => {
-        if (!storage.records[currentSkill.id].wrongs.includes(item.id)) {
-          storage.records[currentSkill.id].wrongs.push(item.id);
-        }
-        storage.reviews[item.id] = {
-          nextReview: addDays(today, 1),
-          interval: 1
-        };
-      });
-
-      saveToStorage();
-      updateReviewCount();
-    }
-
-    // ==================== 圖表 ====================
-    function showRadarChart() {
-      const ctx = document.getElementById("radar-chart");
-      ctx.classList.remove("hidden");
-
-      const data = skills.map(s => {
-        const rec = storage.records[s.id];
-        if (!rec || Object.keys(rec.dates).length === 0) return 0;
-        const rates = Object.values(rec.dates).map(d => (d.correct / d.total) * 100);
-        return Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
-      });
-
-      if (radarChart) radarChart.destroy();
-      radarChart = new Chart(ctx, {
-        type: "radar",
-        data: {
-          labels: skills.map(s => s.name),
-          datasets: [{
-            label: "掌握度 (%)",
-            data,
-            backgroundColor: "rgba(0,123,255,0.2)",
-            borderColor: "#007bff"
-          }]
-        },
-        options: { scales: { r: { beginAtZero: true, max: 100 } } }
-      });
-    }
-
-    function showProgressChart() {
-      const ctx = document.getElementById("progress-chart");
-      ctx.classList.remove("hidden");
-
-      const last7 = getLast7Days();
-      const rates = last7.map(date => {
-        const rec = storage.records[currentSkill.id]?.dates?.[date];
-        return rec ? Math.round((rec.correct / rec.total) * 100) : null;
-      });
-
-      if (progressChart) progressChart.destroy();
-      progressChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: last7.map(d => d.slice(5)),
-          datasets: [{
-            label: "正確率 (%)",
-            data: rates,
-            borderColor: "#28a745",
-            fill: false
-          }]
-        },
-        options: { scales: { y: { min: 0, max: 100 } } }
-      });
-    }
-
-    function showWrongList(wrongs) {
-      const div = document.getElementById("wrong-list");
-      if (wrongs.length === 0) {
-        div.innerHTML = "<p>恭喜！本次全對！</p>";
-        return;
-      }
-      div.innerHTML = "<h3>錯題可點擊進入錯誤分析</h3>";
-
-      wrongs.forEach(q => {
-        const p = document.createElement("p");
-        p.className = "wrong-item";
-        // ✅ 這裡也要 renderMath（你之前用 textContent 會出問題）
-        p.innerHTML = renderMath(q.stem);
-        p.onclick = () => showErrorAnalysis(q);
-        div.appendChild(p);
-      });
-
-      safeTypeset();
-    }
-
-    // ==================== 其他模組 ====================
-    function showErrorAnalysis(question) {
-      showSection("error-analysis");
-      const div = document.getElementById("error-details");
-      div.innerHTML = `
-        <p><strong>題目：</strong>${renderMath(question.stem)}</p>
-        <p><strong>正確答案：</strong>${renderMath(question.answer)}</p>
-        <p><strong>詳解：</strong>${renderMath(question.explanation)}</p>
-        <h4>三層提示（逐步點擊）</h4>
-
-        <button class="hint-btn"
-          onclick="this.nextElementSibling.style.display='block'; this.style.display='none'; this.nextElementSibling.nextElementSibling.style.display='inline-block';">
-          顯示第一層提示
-        </button>
-        <p style="display:none">${renderMath(question.hints[0])}</p>
-
-        <button class="hint-btn" style="display:none"
-          onclick="this.nextElementSibling.style.display='block'; this.style.display='none'; this.nextElementSibling.nextElementSibling.style.display='inline-block';">
-          顯示第二層提示
-        </button>
-        <p style="display:none">${renderMath(question.hints[1])}</p>
-
-        <button class="hint-btn" style="display:none"
-          onclick="this.nextElementSibling.style.display='block'; this.style.display='none';">
-          顯示第三層提示
-        </button>
-        <p style="display:none">${renderMath(question.hints[2])}</p>
+    revealBtn.onclick = async () => {
+      ansBox.classList.remove("hidden");
+      ansBox.innerHTML = `
+        <p><strong>答案：</strong> ${q.answer}</p>
+        <p><strong>詳解：</strong> ${q.explanation}</p>
       `;
-      safeTypeset();
-    }
+      await renderMath();
+    };
 
-    function showMicroLesson() {
-      showSection("micro-lesson");
-      document.getElementById("lesson-skill-name").textContent = currentSkill.name;
+    btnRow.appendChild(checkBtn);
+    btnRow.appendChild(revealBtn);
 
-      const content = document.getElementById("lesson-content");
-      const lesson = currentSkill.microLesson;
+    qdiv.appendChild(inputArea);
+    qdiv.appendChild(btnRow);
+    qdiv.appendChild(ansBox);
 
-      content.innerHTML = `
-        <h3>重點整理</h3>
-        <ul>${lesson.keyPoints.map(p => `<li>${renderMath(p)}</li>`).join("")}</ul>
-        <h3>範例</h3>
-        <p>${renderMath(lesson.example)}</p>
-      `;
-      safeTypeset();
-    }
+    div.appendChild(qdiv);
+  });
 
-    function showPractice() {
-      showSection("practice");
-      document.getElementById("practice-skill-name").textContent = currentSkill.name;
+  await renderMath();
+}
 
-      const items = [...currentSkill.items].sort(() => 0.5 - Math.random()).slice(0, 5);
-      const div = document.getElementById("practice-questions");
+/* ==================== ✅ 間隔複習（修好：真的會出現） ==================== */
+async function showReview() {
+  showSection("review");
 
-      div.innerHTML = "<h3>開始練習！</h3>";
-      items.forEach((q, i) => {
-        const qdiv = document.createElement("div");
-        qdiv.className = "question";
-        qdiv.innerHTML = `<strong>${i + 1}. ${renderMath(q.stem)}</strong><br><em>（作答後可查看詳解）</em>`;
-        div.appendChild(qdiv);
-      });
+  const today = new Date().toISOString().split("T")[0];
+  const due = Object.entries(storage.reviews || {}).filter(([_, r]) => r && r.nextReview && r.nextReview <= today);
 
-      safeTypeset();
-    }
+  const cards = document.getElementById("review-cards");
+  cards.innerHTML = "";
 
-    function showReview() {
-      showSection("review");
+  if (due.length === 0) {
+    cards.innerHTML = "<p>今天沒有需要複習的題目，休息一下吧！</p>";
+    return;
+  }
 
-      const today = new Date().toISOString().split("T")[0];
-      const due = Object.entries(storage.reviews).filter(([_, r]) => r.nextReview <= today);
+  cards.innerHTML = `<p>今日待複習：${due.length} 題</p>`;
 
-      const cards = document.getElementById("review-cards");
-      if (due.length === 0) {
-        cards.innerHTML = "<p>今天沒有需要複習的題目，休息一下吧！</p>";
-        return;
-      }
+  due.forEach(([itemId]) => {
+    const item = findItemById(itemId);
+    if (!item) return;
 
-      cards.innerHTML = `<p>今日待複習：${due.length} 題</p>`;
-      due.forEach(([itemId]) => {
-        const item = findItemById(itemId);
-        if (!item) return;
+    const div = document.createElement("div");
+    div.className = "question";
 
-        const div = document.createElement("div");
-        div.className = "question";
-        div.innerHTML = `
-          <p><strong>${renderMath(item.stem)}</strong></p>
-          <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none'">顯示答案與詳解</button>
-          <div style="display:none">
-            <p><strong>答案：</strong>${renderMath(item.answer)}</p>
-            <p>${renderMath(item.explanation)}</p>
-            <button onclick="reviewDone('${itemId}', true)">記住了</button>
-            <button onclick="reviewDone('${itemId}', false)">還不會</button>
-          </div>
-        `;
-        cards.appendChild(div);
-      });
+    div.innerHTML = `
+      <p><strong>${item.stem}</strong></p>
+      <button class="hint-btn">顯示答案與詳解</button>
+      <div class="hidden">
+        <p><strong>答案：</strong> ${item.answer}</p>
+        <p><strong>詳解：</strong> ${item.explanation}</p>
+        <div class="btn-row">
+          <button class="remember-btn">記住了</button>
+          <button class="forget-btn">還不會</button>
+        </div>
+      </div>
+    `;
 
-      safeTypeset();
-    }
+    const showBtn = div.querySelector(".hint-btn");
+    const hiddenBox = div.querySelector("div.hidden");
+    showBtn.onclick = async () => {
+      hiddenBox.classList.remove("hidden");
+      showBtn.style.display = "none";
+      await renderMath();
+    };
 
-    function reviewDone(itemId, remembered) {
-      const current = storage.reviews[itemId];
-      if (!current) return;
+    div.querySelector(".remember-btn").onclick = () => reviewDone(itemId, true);
+    div.querySelector(".forget-btn").onclick = () => reviewDone(itemId, false);
 
-      const base = new Date().toISOString().split("T")[0];
-      const nextInterval = remembered ? current.interval * 2 : 1;
+    cards.appendChild(div);
+  });
 
-      storage.reviews[itemId] = {
-        nextReview: addDays(base, nextInterval),
-        interval: nextInterval
-      };
+  await renderMath();
+}
 
-      saveToStorage();
-      updateReviewCount();
-      showReview();
-    }
+function reviewDone(itemId, remembered) {
+  const today = new Date().toISOString().split("T")[0];
+  const cur = storage.reviews[itemId] || { interval: 1, nextReview: today };
 
-    // ==================== 工具函數 ====================
-    function findItemById(id) {
-      for (const skill of skills) {
-        const item = skill.items.find(i => i.id === id);
-        if (item) return item;
-      }
-      return null;
-    }
+  const nextInterval = remembered ? Math.max(2, cur.interval * 2) : 1;
+  storage.reviews[itemId] = {
+    interval: nextInterval,
+    nextReview: addDays(today, nextInterval)
+  };
 
-    function addDays(dateStr, days) {
-      const d = new Date(dateStr);
-      d.setDate(d.getDate() + days);
-      return d.toISOString().split("T")[0];
-    }
+  saveToStorage();
+  updateReviewCount();
+  showReview();
+}
 
-    function getLast7Days() {
-      const days = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        days.push(d.toISOString().split("T")[0]);
-      }
-      return days;
-    }
+/* ==================== 工具函數 ==================== */
+function findItemById(id) {
+  for (const skill of skills) {
+    const item = skill.items.find(i => i.id === id);
+    if (item) return item;
+  }
+  return null;
+}
 
-    function updateReviewCount() {
-      const today = new Date().toISOString().split("T")[0];
-      const count = Object.values(storage.reviews).filter(r => r.nextReview <= today).length;
-      document.getElementById("review-count").textContent = count;
-    }
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
 
-    // ==================== 儲存與主題 ====================
-    function saveToStorage() {
-      localStorage.setItem("calcCoachData", JSON.stringify(storage));
-    }
+function getLast7Days() {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split("T")[0]);
+  }
+  return days;
+}
 
-    function loadFromStorage() {
-      const saved = localStorage.getItem("calcCoachData");
-      if (saved) {
-        try {
-          storage = JSON.parse(saved);
-        } catch {
-          storage = { records: {}, reviews: {} };
-        }
-      }
-    }
+function updateReviewCount() {
+  const today = new Date().toISOString().split("T")[0];
+  const count = Object.values(storage.reviews || {}).filter(r => r && r.nextReview && r.nextReview <= today).length;
+  document.getElementById("review-count").textContent = count;
+}
 
-    function resetAllData() {
-      if (confirm("確定要清空所有學習紀錄？")) {
-        localStorage.removeItem("calcCoachData");
-        storage = { records: {}, reviews: {} };
-        updateReviewCount();
-        alert("已重設完成！");
-      }
-    }
+/* ✅ calc 題答案標準化：空白、全形、大小寫等 */
+function normalizeAns(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/\s+/g, "")
+    .replace(/＝/g, "=")
+    .replace(/−/g, "-")
+    .trim()
+    .toLowerCase();
+}
 
-    function toggleTheme() {
-      document.body.classList.toggle("dark");
-      localStorage.setItem("calcCoachTheme", document.body.classList.contains("dark") ? "dark" : "light");
-    }
+/* ==================== 儲存與主題 ==================== */
+function saveToStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(storage));
+}
 
-    function applyTheme() {
-      if (localStorage.getItem("calcCoachTheme") === "dark") {
-        document.body.classList.add("dark");
-      }
-    }
-  </script>
+function loadFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+
+    const parsed = JSON.parse(saved);
+
+    // ✅ 資料遷移/補洞：避免舊版缺欄位導致功能壞掉
+    storage = {
+      records: parsed.records && typeof parsed.records === "object" ? parsed.records : {},
+      reviews: parsed.reviews && typeof parsed.reviews === "object" ? parsed.reviews : {}
+    };
+  } catch (e) {
+    storage = { records: {}, reviews: {} };
+  }
+}
+
+function resetAllData() {
+  if (!confirm("確定要清空所有學習紀錄？")) return;
+
+  localStorage.removeItem(STORAGE_KEY);
+  storage = { records: {}, reviews: {} };
+
+  // ✅ 立即把 UI/圖表也清掉（你原本覺得沒效果就是卡在這裡）
+  if (radarChart) { radarChart.destroy(); radarChart = null; }
+  if (progressChart) { progressChart.destroy(); progressChart = null; }
+
+  document.getElementById("quiz-form").innerHTML = "";
+  document.getElementById("quiz-form").classList.add("hidden");
+  document.getElementById("submit-quiz").classList.add("hidden");
+  document.getElementById("wrong-list").innerHTML = "";
+
+  document.getElementById("radar-chart").classList.add("hidden");
+  document.getElementById("progress-chart").classList.add("hidden");
+
+  updateReviewCount();
+  alert("已重設完成！");
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+  localStorage.setItem(THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
+}
+
+function applyTheme() {
+  if (localStorage.getItem(THEME_KEY) === "dark") {
+    document.body.classList.add("dark");
+  }
+}
+</script>
 </body>
 </html>
